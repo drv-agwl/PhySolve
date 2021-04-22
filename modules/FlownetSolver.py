@@ -240,7 +240,7 @@ class FlownetSolver():
                                                    batch_size, shuffle=True)
 
         # Load model from ckpt
-        # self.model.load_state_dict(T.load("./checkpoints/100.pt"))
+        # self.collision_model.load_state_dict(T.load("./checkpoints/CollisionModel/100.pt"))
 
         rows = []
         pic_no = 1
@@ -256,7 +256,7 @@ class FlownetSolver():
 
                 red_ball_preds = []
                 for timestep in range(num_steps):
-                    red_ball_pred = self.model(model_input)
+                    red_ball_pred = self.collision_model(model_input)
                     red_ball_preds.append(red_ball_pred)
 
                     loss = F.binary_cross_entropy(red_ball_pred[:, 0], red_ball_gt[:, timestep])
@@ -292,8 +292,8 @@ class FlownetSolver():
                     print(f"Epoch-{epoch}, iteration-{i}: Loss = {loss.item()}")
 
                 if len(rows) == 5:
-                    os.makedirs(f"./results/train/{epoch + 1}", exist_ok=True)
-                    save_img_dir = f"./results/train/{epoch + 1}/"
+                    os.makedirs(f"./results/train/CollisionModel/{epoch + 1}", exist_ok=True)
+                    save_img_dir = f"./results/train/CollisionModel/{epoch + 1}/"
                     vis_pred_path_task(rows, save_img_dir, pic_no)
                     pic_no += 1
                     rows = []
@@ -305,8 +305,8 @@ class FlownetSolver():
             losses = []
             rows = []
             print("Validation")
-            os.makedirs("./checkpoints", exist_ok=True)
-            T.save(self.model.state_dict(), f"./checkpoints/{epoch + 1}.pt")
+            os.makedirs("./checkpoints/CollisionModel", exist_ok=True)
+            T.save(self.collision_model.state_dict(), f"./checkpoints/CollisionModel/{epoch + 1}.pt")
             for i, (X,) in enumerate(test_data_loader):
                 X = X.float().to(self.device)
 
@@ -316,7 +316,7 @@ class FlownetSolver():
 
                 red_ball_preds = []
                 for timestep in range(num_steps):
-                    red_ball_pred = self.model(model_input)
+                    red_ball_pred = self.collision_model(model_input)
                     red_ball_preds.append(red_ball_pred)
 
                     loss = F.binary_cross_entropy(red_ball_pred[:, 0], red_ball_gt[:, timestep])
@@ -363,8 +363,8 @@ class FlownetSolver():
                     print(f"Epoch-{epoch}, iteration-{i}: Loss = {loss.item()}")
 
                 if len(rows) == 5 or len(rows) == 7:
-                    os.makedirs(f"./results/test/visualise/{epoch + 1}", exist_ok=True)
-                    save_img_dir = f"./results/test/visualise/{epoch + 1}/"
+                    os.makedirs(f"./results/test/CollisionModel/{epoch + 1}", exist_ok=True)
+                    save_img_dir = f"./results/test/CollisionModel/{epoch + 1}/"
                     vis_pred_path_task(rows, save_img_dir, pic_no)
                     pic_no += 1
                     rows = []
@@ -373,8 +373,8 @@ class FlownetSolver():
 
             pic_no = 1
 
-        os.makedirs("./logs", exist_ok=True)
-        with open(f"./logs/{epochs}.pkl", "wb") as f:
+        os.makedirs("./logs/CollisionModel", exist_ok=True)
+        with open(f"./logs/CollisionModel/{epochs}.pkl", "wb") as f:
             pickle.dump({"Train losses": train_loss_log,
                          "Test losses": val_loss_log}, f)
 
@@ -448,7 +448,7 @@ class FlownetSolver():
                                                    batch_size, shuffle=True)
 
         # Load model from ckpt
-        # self.model.load_state_dict(T.load("./checkpoints/100.pt"))
+        # self.collision_model.load_state_dict(T.load("./checkpoints/100.pt"))
 
         rows = []
         pic_no = 1
