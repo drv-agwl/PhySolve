@@ -169,7 +169,7 @@ class FlownetSolver():
         self.logger = dict()
 
         self.collision_model = Pyramid(seq_len * 2 + seq_len // 2 + 2, 1, width, hidfac)
-        self.position_model = Pyramid2(3, 1)
+        self.position_model = Pyramid2(5, 1)
 
         print("succesfully initialized models")
 
@@ -425,14 +425,19 @@ class FlownetSolver():
                     static_obj_idxs = [3, 5]
 
                 green_ball_collision = obj_channels[collision_idx, green_ball_idx].astype(np.uint8)
-                red_ball_collision = obj_channels[collision_idx, red_ball_idx].astype(np.uint8)
+                # red_ball_collision = obj_channels[collision_idx, red_ball_idx].astype(np.uint8)
+                red_ball_path = np.flip(obj_channels[:self.seq_len // 2 + 1, red_ball_idx], axis=0).astype(
+                    np.uint8)
 
                 red_ball_gt = initial_scene[red_ball_idx].astype(np.uint8)
 
                 static_objs = np.max(obj_channels[0, static_obj_idxs, :, :][None], axis=1).astype(np.uint8)
 
-                combined = np.concatenate([green_ball_collision[None], red_ball_collision[None], static_objs,
-                                           red_ball_gt[None]], axis=0).astype(np.uint8)
+                # combined = np.concatenate([green_ball_collision[None], red_ball_path[None], static_objs,
+                #                            red_ball_gt[None]], axis=0).astype(np.uint8)
+
+                combined = np.concatenate([red_ball_path, green_ball_collision[None], static_objs, red_ball_gt[None]],
+                                          axis=0).astype(np.uint8)
 
                 train_data.append({"Images": combined,
                                    "Collision_time": collision_time})
@@ -474,9 +479,9 @@ class FlownetSolver():
                 # Visualisation
                 row = []
 
-                green_ball_collision = X_image[-1, 0][:, :, None].cpu()
-                red_ball_collision = X_image[-1, 1][:, :, None].cpu()
-                static_objs = X_image[-1, 2][:, :, None].cpu()
+                green_ball_collision = X_image[-1, 3][:, :, None].cpu()
+                red_ball_collision = X_image[-1, 0][:, :, None].cpu()
+                static_objs = X_image[-1, -2][:, :, None].cpu()
 
                 collision_scene = np.concatenate([red_ball_collision, green_ball_collision, static_objs], axis=-1)
 
