@@ -52,7 +52,7 @@ class Pyramid2(nn.Module):
                                         nn.Linear(8, 2),
                                         nn.ReLU(),
                                         nn.Linear(2, 1),
-                                        nn.Sigmoid(),
+                                        nn.ReLU(),
                                         )
 
         self.dense_up = nn.Sequential(nn.Linear(2, 8),
