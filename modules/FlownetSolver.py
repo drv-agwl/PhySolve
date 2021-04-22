@@ -28,17 +28,17 @@ class Pyramid2(nn.Module):
     def __init__(self, in_dim, chs):
         super().__init__()
 
-        self.encoder = nn.Sequential(nn.Conv2d(in_dim, 8, 4, 2, 1),
+        self.encoder = nn.Sequential(nn.Conv2d(in_dim, 8, 8, 2, 3),
                                      nn.ReLU(),
-                                     nn.Conv2d(8, 16, 4, 2, 1),
+                                     nn.Conv2d(8, 16, 8, 2, 3),
                                      nn.ReLU(),
-                                     nn.Conv2d(16, 32, 4, 2, 1),
+                                     nn.Conv2d(16, 32, 8, 2, 3),
                                      nn.ReLU(),
-                                     nn.Conv2d(32, 64, 4, 2, 1),
+                                     nn.Conv2d(32, 64, 8, 2, 3),
                                      nn.ReLU(),
-                                     nn.Conv2d(64, 128, 4, 2, 1),
+                                     nn.Conv2d(64, 128, 8, 2, 3),
                                      nn.ReLU(),
-                                     nn.Conv2d(128, 128, 4, 2, 1),
+                                     nn.Conv2d(128, 128, 8, 2, 3),
                                      nn.ReLU())
 
         self.flatten = nn.Flatten()
@@ -64,17 +64,17 @@ class Pyramid2(nn.Module):
                                       nn.Linear(128, 2*2*128),
                                       nn.ReLU())
 
-        self.decoder = nn.Sequential(nn.ConvTranspose2d(128, 128, 4, 2, 1),
+        self.decoder = nn.Sequential(nn.ConvTranspose2d(128, 128, 8, 2, 3),
                                      nn.ReLU(),
-                                     nn.ConvTranspose2d(128, 64, 4, 2, 1),
+                                     nn.ConvTranspose2d(128, 64, 8, 2, 3),
                                      nn.ReLU(),
-                                     nn.ConvTranspose2d(64, 32, 4, 2, 1),
+                                     nn.ConvTranspose2d(64, 32, 8, 2, 3),
                                      nn.ReLU(),
-                                     nn.ConvTranspose2d(32, 16, 4, 2, 1),
+                                     nn.ConvTranspose2d(32, 16, 8, 2, 3),
                                      nn.ReLU(),
-                                     nn.ConvTranspose2d(16, 8, 4, 2, 1),
+                                     nn.ConvTranspose2d(16, 8, 8, 2, 3),
                                      nn.ReLU(),
-                                     nn.ConvTranspose2d(8, chs, 4, 2, 1),
+                                     nn.ConvTranspose2d(8, chs, 8, 2, 3),
                                      nn.Sigmoid())
 
     def forward(self, x, time):
