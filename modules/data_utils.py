@@ -49,6 +49,9 @@ def load_data_position(data_paths, seq_len, size):
 
             static_objs = np.max(obj_channels[0, static_obj_idxs, :, :][None], axis=1).astype(np.uint8)
 
+            initial_scene = np.concatenate(
+                [initial_scene[i][None] for i in [red_ball_idx, green_ball_idx]] + [static_objs],
+                axis=0)
             combined = np.concatenate([green_ball_collision[None], red_ball_collision[None], static_objs,
                                        initial_scene, red_ball_gt[None]], axis=0).astype(np.uint8)
 

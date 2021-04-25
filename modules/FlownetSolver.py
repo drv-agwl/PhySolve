@@ -42,7 +42,7 @@ class Pyramid2(nn.Module):
                                      nn.ReLU())
 
         self.flatten = nn.Flatten()
-        self.dense = nn.Sequential(nn.Linear(128*2*2+1, 128*2*2),
+        self.dense = nn.Sequential(nn.Linear(128 * 2 * 2 + 1, 128 * 2 * 2),
                                    nn.ReLU())
 
         self.dense_down = nn.Sequential(nn.Linear(2 * 2 * 128, 128),
@@ -385,55 +385,66 @@ class FlownetSolver():
         rows = []
         pic_no = 1
 
-        losses = []
         for i, batch in enumerate(data_loader):
             X_image = batch[0].float().to(self.device)
             X_time = batch[1].float().to(self.device) / 33.  # divide by max value of time
 
+            initial_scenes = X_image[:, 3:-1].detach().cpu().numpy()
             red_ball_gt = X_image[:, -1]
 
             num_times = 3
-            X_times = [X_time*i/num_times for i in range(num_times)]
+            X_times = [X_time * i / num_times for i in range(1, num_times + 1)]
             red_ball_preds = []
 
             for X_time in X_times:
-                model_input = X_image[:, :-1], X_time
+                model_input = X_image[:, :3], X_time
                 red_ball_pred = self.position_model(model_input[0], model_input[1])
                 red_ball_preds.append(red_ball_pred)
 
             # Visualisation
-            row = []
+            for idx in range(X_image.shape[0]):
+                row = []
 
-            green_ball_collision = X_image[-1, 3][:, :, None].cpu()
-            red_ball_collision = X_image[-1, 0][:, :, None].cpu()
-            static_objs = X_image[-1, -2][:, :, None].cpu()
+                green_ball_collision = X_image[idx, 0][:, :, None].cpu()
+                red_ball_collision = X_image[idx, 1][:, :, None].cpu()
+                static_objs = X_image[idx, 2][:, :, None].cpu()
 
-            collision_scene = np.concatenate([red_ball_collision, green_ball_collision, static_objs], axis=-1)
+                row.append(np.moveaxis(initial_scenes[idx], 0, 2))
 
-            row.append(collision_scene)
+                empty_channel = np.zeros_like(static_objs)
 
-            empty_channel = np.zeros_like(static_objs)
+                collision_scene = np.concatenate([red_ball_collision, green_ball_collision, empty_channel, static_objs],
+                                                 axis=-1)
 
-            row.append(
-                np.concatenate([red_ball_gt.detach().cpu()[-1][:, :, None], empty_channel, empty_channel], axis=-1))
+                pred_channel = collision_scene.copy()
+                pred_channel[..., 0] = np.max(np.concatenate([pred_channel[..., 0][..., None],
+                                                              red_ball_gt.detach().cpu()[idx, ..., None]], axis=-1),
+                                              axis=-1)
+                # pred_channel[..., 1] = np.max(np.concatenate([pred_channel[..., 1][..., None],
+                #                                               red_ball_gt.detach().cpu()[idx, ..., None]], axis=-1),
+                #                               axis=-1)
+                pred_channel[..., 2] = np.max(np.concatenate([pred_channel[..., 2][..., None],
+                                                              red_ball_preds[-1].detach().cpu()[idx, 0, ..., None]],
+                                                             axis=-1),
+                                              axis=-1)
+                row.append(pred_channel)
 
-            row.append(
-                np.concatenate([red_ball_pred.detach().cpu()[-1][0][:, :, None], empty_channel, empty_channel],
-                               axis=-1))
+                for red_ball_pred in reversed(red_ball_preds[:-1]):
+                    pred_channel = collision_scene.copy()
+                    pred_channel[..., 2] = np.max(np.concatenate([pred_channel[..., 2][..., None],
+                                                                  red_ball_pred.detach().cpu()[idx, 0, ..., None]],
+                                                                 axis=-1),
+                                                  axis=-1)
+                    row.append(pred_channel)
 
-            rows.append(row)
+                rows.append(row)
 
-            if i % 5 == 0:
-                print(f"Epoch-{epoch}, iteration-{i}: Loss = {loss.item()}")
-
-            if len(rows) == 5:
-                os.makedirs(f"./results/train/PositionModel/{epoch + 1}", exist_ok=True)
-                save_img_dir = f"./results/train/PositionModel/{epoch + 1}/"
-                vis_pred_path_task(rows, save_img_dir, pic_no)
-                pic_no += 1
-                rows = []
-
-            pic_no = 1
+                if len(rows) == 20:
+                    os.makedirs(f"./results/test/PositionModel/visualisation", exist_ok=True)
+                    save_img_dir = f"./results/test/PositionModel/visualisation"
+                    vis_pred_path_task(rows, save_img_dir, pic_no)
+                    pic_no += 1
+                    rows = []
 
     def train_position_model(self, data_paths, epochs=100, width=128, batch_size=32):
         if self.device == "cuda":
@@ -469,7 +480,7 @@ class FlownetSolver():
                 X_image = batch[0].float().to(self.device)
                 X_time = batch[1].float().to(self.device) / 33.  # divide by max value of time
 
-                model_input = X_image[:, :-1], X_time
+                model_input = X_image[:, :3], X_time
                 red_ball_gt = X_image[:, -1]
 
                 red_ball_pred = self.position_model(model_input[0], model_input[1])
@@ -484,9 +495,9 @@ class FlownetSolver():
                 # Visualisation
                 row = []
 
-                green_ball_collision = X_image[-1, 3][:, :, None].cpu()
-                red_ball_collision = X_image[-1, 0][:, :, None].cpu()
-                static_objs = X_image[-1, -2][:, :, None].cpu()
+                green_ball_collision = X_image[-1, 0][:, :, None].cpu()
+                red_ball_collision = X_image[-1, 1][:, :, None].cpu()
+                static_objs = X_image[-1, 2][:, :, None].cpu()
 
                 collision_scene = np.concatenate([red_ball_collision, green_ball_collision, static_objs], axis=-1)
 
@@ -527,7 +538,7 @@ class FlownetSolver():
                 X_image = batch[0].float().to(self.device)
                 X_time = batch[1].float().to(self.device) / 33.
 
-                model_input = X_image[:, :-1], X_time
+                model_input = X_image[:, :3], X_time
                 red_ball_gt = X_image[:, -1]
 
                 red_ball_pred = self.position_model(model_input[0], model_input[1])
