@@ -45,39 +45,39 @@ class Pyramid2(nn.Module):
         self.dense = nn.Sequential(nn.Linear(128 * 2 * 2 + 1, 128 * 2 * 2),
                                    nn.ReLU())
 
-        self.dense_down = nn.Sequential(nn.Linear(2 * 2 * 128, 128),
-                                        nn.ReLU(),
-                                        nn.Linear(128, 32),
-                                        nn.ReLU(),
-                                        nn.Linear(32, 8),
-                                        nn.ReLU(),
-                                        nn.Linear(8, 2),
-                                        nn.ReLU(),
-                                        nn.Linear(2, 1),
-                                        nn.ReLU(),
-                                        )
-
-        self.dense_up = nn.Sequential(nn.Linear(2, 8),
-                                      nn.ReLU(),
-                                      nn.Linear(8, 32),
-                                      nn.ReLU(),
-                                      nn.Linear(32, 128),
-                                      nn.ReLU(),
-                                      nn.Linear(128, 2 * 2 * 128),
-                                      nn.ReLU())
-
-        self.decoder = nn.Sequential(nn.ConvTranspose2d(128, 128, 4, 2, 1),
-                                     nn.ReLU(),
-                                     nn.ConvTranspose2d(128, 64, 4, 2, 1),
-                                     nn.ReLU(),
-                                     nn.ConvTranspose2d(64, 32, 4, 2, 1),
-                                     nn.ReLU(),
-                                     nn.ConvTranspose2d(32, 16, 4, 2, 1),
-                                     nn.ReLU(),
-                                     nn.ConvTranspose2d(16, 8, 4, 2, 1),
-                                     nn.ReLU(),
-                                     nn.ConvTranspose2d(8, chs, 4, 2, 1),
-                                     nn.Sigmoid())
+        # self.dense_down = nn.Sequential(nn.Linear(2 * 2 * 128, 128),
+        #                                 nn.ReLU(),
+        #                                 nn.Linear(128, 32),
+        #                                 nn.ReLU(),
+        #                                 nn.Linear(32, 8),
+        #                                 nn.ReLU(),
+        #                                 nn.Linear(8, 2),
+        #                                 nn.ReLU(),
+        #                                 nn.Linear(2, 1),
+        #                                 nn.ReLU(),
+        #                                 )
+        #
+        # self.dense_up = nn.Sequential(nn.Linear(2, 8),
+        #                               nn.ReLU(),
+        #                               nn.Linear(8, 32),
+        #                               nn.ReLU(),
+        #                               nn.Linear(32, 128),
+        #                               nn.ReLU(),
+        #                               nn.Linear(128, 2 * 2 * 128),
+        #                               nn.ReLU())
+        #
+        # self.decoder = nn.Sequential(nn.ConvTranspose2d(128, 128, 4, 2, 1),
+        #                              nn.ReLU(),
+        #                              nn.ConvTranspose2d(128, 64, 4, 2, 1),
+        #                              nn.ReLU(),
+        #                              nn.ConvTranspose2d(64, 32, 4, 2, 1),
+        #                              nn.ReLU(),
+        #                              nn.ConvTranspose2d(32, 16, 4, 2, 1),
+        #                              nn.ReLU(),
+        #                              nn.ConvTranspose2d(16, 8, 4, 2, 1),
+        #                              nn.ReLU(),
+        #                              nn.ConvTranspose2d(8, chs, 4, 2, 1),
+        #                              nn.Sigmoid())
 
     def forward(self, x, time):
         x = self.encoder(x)
