@@ -43,10 +43,10 @@ class Pyramid2(nn.Module):
                                      nn.ReLU())
 
         self.flatten = nn.Flatten()
-        self.dense = nn.Sequential(nn.Linear(128 * 2 * 2 + 1, 128 * 2 * 2),
+        self.dense = nn.Sequential(nn.Linear(128 * 1 * 1 + 1, 128 * 1 * 1),
                                    nn.ReLU())
 
-        self.dense_down = nn.Sequential(nn.Linear(2 * 2 * 128, 128),
+        self.dense_down = nn.Sequential(nn.Linear(1 * 1 * 128, 128),
                                         nn.ReLU(),
                                         nn.Linear(128, 32),
                                         nn.ReLU(),
@@ -81,16 +81,17 @@ class Pyramid2(nn.Module):
                                      nn.Sigmoid())
 
     def forward(self, x, time):
+        x = torch.cat([x, time], dim=1)
         x = self.encoder(x)
         x = self.flatten(x)
         # x = self.dense_down(x)
 
-        x = torch.cat((x, time[:, None]), dim=-1)
-        x = self.dense(x)
+        # x = torch.cat((x, time[:, None]), dim=-1)
+        # x = self.dense(x)
 
         # x = self.dense_up(x)
         b = x.size(0)
-        x = x.view(b, 128, 2, 2)
+        x = x.view(b, 128, 1, 1)
         x = self.decoder(x)
 
         return x
@@ -173,7 +174,7 @@ class FlownetSolver():
         self.logger = dict()
 
         self.collision_model = Pyramid(seq_len * 2 + seq_len // 2 + 2, 1, width, hidfac)
-        self.position_model = Pyramid2(3, 1)
+        self.position_model = Pyramid2(4, 1)
 
         print("succesfully initialized models")
 
@@ -444,7 +445,7 @@ class FlownetSolver():
                     pic_no += 1
                     rows = []
 
-    def train_position_model(self, data_paths, epochs=100, width=128, batch_size=32):
+    def train_position_model(self, data_paths, epochs=100, width=64, batch_size=32, smooth_loss=False):
         if self.device == "cuda":
             self.position_model.cuda()
 
@@ -478,10 +479,16 @@ class FlownetSolver():
                 X_time = batch[1].float().to(self.device) / 109.6
                 X_red_diam = batch[2].float().to(self.device) # divide by max value of time
 
-                model_input = X_image[:, :3], X_time
+                X_time = X_time[:, None, None].repeat(1, self.width, self.width)
+
+                model_input = X_image[:, :3], X_time[:, None]
                 red_ball_gt = X_image[:, -1]
 
                 red_ball_pred = self.position_model(model_input[0], model_input[1])
+
+                if smooth_loss:
+                    red_ball_gt += 0.005
+                    red_ball_gt = torch.clamp(red_ball_gt, 0., 1.)
 
                 loss = F.binary_cross_entropy(red_ball_pred.squeeze(1), red_ball_gt)
                 losses.append(loss.item())
@@ -534,9 +541,11 @@ class FlownetSolver():
             T.save(self.position_model.state_dict(), f"./checkpoints/PositionModel/{epoch + 1}.pt")
             for i, batch in enumerate(test_data_loader):
                 X_image = batch[0].float().to(self.device)
-                X_time = batch[1].float().to(self.device) / 33.
+                X_time = batch[1].float().to(self.device) / 109.6
 
-                model_input = X_image[:, :3], X_time
+                X_time = X_time[:, None, None].repeat(1, self.width, self.width)
+
+                model_input = X_image[:, :3], X_time[:, None]
                 red_ball_gt = X_image[:, -1]
 
                 red_ball_pred = self.position_model(model_input[0], model_input[1])

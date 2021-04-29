@@ -10,7 +10,7 @@ eval_setup = 'ball_cross_template'
 fold_id = 0
 num_samples = 100
 sigma = 0.5
-size = (128, 128)
+size = (64, 64)
 
 train_tasks, dev_tasks, test_tasks = phyre.get_fold(eval_setup, fold_id)
 
@@ -24,7 +24,7 @@ train_tasks, dev_tasks, test_tasks = phyre.get_fold(eval_setup, fold_id)
 
 tasks = train_tasks + dev_tasks + test_tasks
 
-no_grey_ids = [0, 1, 2, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16]
+no_grey_ids = [1, 2, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16]
 task_ids = [str(i).zfill(5) for i in no_grey_ids]
 tasks_ids = sorted([x for x in tasks if x.startswith(tuple(task_ids))])
 
