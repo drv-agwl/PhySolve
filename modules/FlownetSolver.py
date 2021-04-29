@@ -17,8 +17,9 @@ class PosModelDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         images = self.data[idx]["Images"]
         collision_time = self.data[idx]["Collision_time"]
+        red_diam = self.data[idx]["Red_diam"]
 
-        return images, collision_time
+        return images, collision_time, red_diam
 
     def __len__(self):
         return len(self.data)
@@ -463,7 +464,7 @@ class FlownetSolver():
                                                    batch_size, shuffle=True)
 
         # Load model from ckpt
-        self.position_model.load_state_dict(T.load("./checkpoints/PositionModel/50.pt"))
+        # self.position_model.load_state_dict(T.load("./checkpoints/PositionModel/50.pt"))
 
         # self.make_visualisations(test_data_loader)
 
@@ -474,7 +475,8 @@ class FlownetSolver():
             losses = []
             for i, batch in enumerate(train_data_loader):
                 X_image = batch[0].float().to(self.device)
-                X_time = batch[1].float().to(self.device) / 33.  # divide by max value of time
+                X_time = batch[1].float().to(self.device) / 109.6
+                X_red_diam = batch[2].float().to(self.device) # divide by max value of time
 
                 model_input = X_image[:, :3], X_time
                 red_ball_gt = X_image[:, -1]

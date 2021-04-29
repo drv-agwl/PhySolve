@@ -70,10 +70,16 @@ database = []
 
 
 def get_obj_channels(imgs, size):
-    obj_channels = np.array(
-        [np.array([cv2.resize((frame == ch).astype(float), size, cv2.INTER_MAX) for ch in channels]) for
-         frame in imgs])
-    obj_channels = np.flip(obj_channels, axis=2).astype(np.uint8)
+    if len(imgs.shape) == 2:
+        obj_channels = np.array([cv2.resize(((imgs == ch).astype(float)), size, cv2.INTER_MAX)
+                                 for ch in channels])
+        obj_channels = np.flip(obj_channels, axis=1)
+
+    else:
+        obj_channels = np.array(
+            [np.array([cv2.resize((frame == ch).astype(float), size, cv2.INTER_MAX) for ch in channels]) for
+             frame in imgs])
+        obj_channels = np.flip(obj_channels, axis=2).astype(np.uint8)
 
     return obj_channels
 

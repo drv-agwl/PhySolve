@@ -2,6 +2,7 @@ import pickle
 import numpy as np
 import cv2
 import random
+import gzip
 
 
 def load_data_position(data_paths, seq_len, size):
@@ -10,11 +11,12 @@ def load_data_position(data_paths, seq_len, size):
     train_data = []
 
     for data_path in data_paths:
-        with open(data_path, 'rb') as handle:
-            task_data = pickle.load(handle)
+        with gzip.open(data_path, 'rb') as fp:
+            task_data = pickle.load(fp)
         for data in task_data:
             obj_channels = data['images_solved']
             collision_time = data["collision_timestep"]
+            features = data["features"]
 
             scene_0 = data["scene-0"]
             scene_33 = data["scene-33"]
@@ -39,18 +41,18 @@ def load_data_position(data_paths, seq_len, size):
             #                     for ch in channels])
             # scene_66 = np.flip(scene_66, axis=1)
 
-            if data_path.split('.')[0][-1] == '2':  # Task-2:
-                green_ball_idx = 1
-                red_ball_idx = 0
-                static_obj_idxs = [3, 5]
-            elif data_path.split('.')[0][-1] == '0':  # Task-20
-                green_ball_idx = 1
-                red_ball_idx = 0
-                static_obj_idxs = [3, 5]
-            elif data_path.split('.')[0][-1] == '5':  # Task-15
-                green_ball_idx = 1
-                red_ball_idx = 0
-                static_obj_idxs = [3, 5]
+            # if data_path.split('.')[0][-1] == '2':  # Task-2:
+            green_ball_idx = 1
+            red_ball_idx = 0
+            static_obj_idxs = [3, 5]
+            # elif data_path.split('.')[0][-1] == '0':  # Task-20
+            #     green_ball_idx = 1
+            #     red_ball_idx = 0
+            #     static_obj_idxs = [3, 5]
+            # elif data_path.split('.')[0][-1] == '5':  # Task-15
+            #     green_ball_idx = 1
+            #     red_ball_idx = 0
+            #     static_obj_idxs = [3, 5]
 
             green_ball_collision = obj_channels[collision_idx, green_ball_idx].astype(np.uint8)
             red_ball_collision = obj_channels[collision_idx, red_ball_idx].astype(np.uint8)
@@ -80,8 +82,10 @@ def load_data_position(data_paths, seq_len, size):
             # combined = np.concatenate([red_ball_path, static_objs, red_ball_gt[None]],
             #                           axis=0).astype(np.uint8)
 
+            red_diam = features[0][-1][3]
             train_data.append({"Images": combined,
-                               "Collision_time": collision_time})
+                               "Collision_time": collision_time,
+                               "Red_diam": red_diam})
 
     random.seed(7)
     random.shuffle(train_data)
