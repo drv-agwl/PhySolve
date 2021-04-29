@@ -37,13 +37,13 @@ class Pyramid2(nn.Module):
                                      nn.ReLU(),
                                      nn.Conv2d(32, 64, 4, 2, 1),
                                      nn.ReLU(),
-                                     nn.Conv2d(64, 128, 4, 2, 1),
+                                     nn.Conv2d(64, 64, 4, 2, 1),
                                      nn.ReLU(),
-                                     nn.Conv2d(128, 128, 4, 2, 1),
+                                     nn.Conv2d(64, 64, 4, 2, 1),
                                      nn.ReLU())
 
         self.flatten = nn.Flatten()
-        self.dense = nn.Sequential(nn.Linear(128 * 1 * 1 + 1, 128 * 1 * 1),
+        self.dense = nn.Sequential(nn.Linear(64 * 1 * 1 + 1, 64 * 1 * 1),
                                    nn.ReLU())
 
         self.dense_down = nn.Sequential(nn.Linear(1 * 1 * 128, 128),
@@ -67,9 +67,9 @@ class Pyramid2(nn.Module):
                                       nn.Linear(128, 2 * 2 * 128),
                                       nn.ReLU())
 
-        self.decoder = nn.Sequential(nn.ConvTranspose2d(128, 128, 4, 2, 1),
+        self.decoder = nn.Sequential(nn.ConvTranspose2d(64, 64, 4, 2, 1),
                                      nn.ReLU(),
-                                     nn.ConvTranspose2d(128, 64, 4, 2, 1),
+                                     nn.ConvTranspose2d(64, 64, 4, 2, 1),
                                      nn.ReLU(),
                                      nn.ConvTranspose2d(64, 32, 4, 2, 1),
                                      nn.ReLU(),
@@ -91,7 +91,7 @@ class Pyramid2(nn.Module):
 
         # x = self.dense_up(x)
         b = x.size(0)
-        x = x.view(b, 128, 1, 1)
+        x = x.view(b, 64, 1, 1)
         x = self.decoder(x)
 
         return x
@@ -550,7 +550,7 @@ class FlownetSolver():
 
                 red_ball_pred = self.position_model(model_input[0], model_input[1])
 
-                loss = F.binary_cross_entropy(red_ball_pred.squeeze(1), red_ball_gt)
+                loss = F.binary_cross_entropy(red_ball_pred.squeeze(1), red_ball_gt, weight=10)
                 losses.append(loss.item())
 
                 # Visualisation
