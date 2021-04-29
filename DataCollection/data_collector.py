@@ -4,6 +4,7 @@ import random
 from gSolver import path_cost
 from utils import *
 import pickle
+import gzip
 
 eval_setup = 'ball_cross_template'
 fold_id = 0
@@ -20,7 +21,12 @@ train_tasks, dev_tasks, test_tasks = phyre.get_fold(eval_setup, fold_id)
 #         continue
 
 # body-list = [Black, Green, Goal, Red]
-tasks_ids = [x for x in test_tasks if x.startswith('00015')]
+
+tasks = train_tasks + dev_tasks + test_tasks
+
+no_grey_ids = [0, 1, 2, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16]
+task_ids = [str(i).zfill(5) for i in no_grey_ids]
+tasks_ids = sorted([x for x in tasks if x.startswith(tuple(task_ids))])
 
 
 def get_collision_timestep(res):
@@ -62,7 +68,18 @@ def check_collision(res):
 sim = phyre.initialize_simulator(tasks_ids, 'ball')
 database = []
 
+
+def get_obj_channels(imgs, size):
+    obj_channels = np.array(
+        [np.array([cv2.resize((frame == ch).astype(float), size, cv2.INTER_MAX) for ch in channels]) for
+         frame in imgs])
+    obj_channels = np.flip(obj_channels, axis=2).astype(np.uint8)
+
+    return obj_channels
+
+
 for task_idx, task in enumerate(tasks_ids):
+    database = []
     solving = True  # collect solving or non-solving task
     stride = 5  # num frames to skip
     number_to_solve = 10
@@ -106,6 +123,7 @@ for task_idx, task in enumerate(tasks_ids):
 
             collision_timestep = get_collision_timestep(res)
             imgs_solved = res.images[range(collision_timestep - 2 * stride, collision_timestep + 3 * stride, stride)]
+            imgs_solved = get_obj_channels(imgs_solved, size=(64, 64))
 
             features = res.featurized_objects.features[
                 range(collision_timestep - 2 * stride, collision_timestep + 3 * stride, stride)]
@@ -118,12 +136,21 @@ for task_idx, task in enumerate(tasks_ids):
                 continue
             imgs_unsolved = res_unsolved.images[
                 range(collision_timestep - 2 * stride, collision_timestep + 3 * stride, stride)]
+            imgs_unsolved = get_obj_channels(imgs_unsolved, size=(64, 64))
 
             database.append({'images_solved': np.array(imgs_solved),
                              'images_unsolved': np.array(imgs_unsolved),
                              'features': features,
-                             'collision_timestep': int(collision_timestep // stride),
-                             'initial_scene': np.array(res.images[0])})
+                             'collision_timestep': collision_timestep / stride,
+                             'scene-0': get_obj_channels(np.array(res.images[0]), size=(64, 64)),
+                             'scene-33': get_obj_channels(np.array(res.images[collision_timestep * 1 // 3]),
+                                                          size=(64, 64)),
+                             'scene-66': get_obj_channels(np.array(res.images[collision_timestep * 2 // 3]),
+                                                          size=(64, 64))})
 
-with open('database_task15.pkl', 'wb') as handle:
-    pickle.dump(database, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    file = gzip.GzipFile(f'./Database/{task}.pkl', 'wb')
+    pickle.dump(database, file)
+    file.close()
+
+    # with open() as handle:
+    #     pickle.dump(database, handle, protocol=pickle.HIGHEST_PROTOCOL)

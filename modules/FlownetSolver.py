@@ -45,39 +45,39 @@ class Pyramid2(nn.Module):
         self.dense = nn.Sequential(nn.Linear(128 * 2 * 2 + 1, 128 * 2 * 2),
                                    nn.ReLU())
 
-        # self.dense_down = nn.Sequential(nn.Linear(2 * 2 * 128, 128),
-        #                                 nn.ReLU(),
-        #                                 nn.Linear(128, 32),
-        #                                 nn.ReLU(),
-        #                                 nn.Linear(32, 8),
-        #                                 nn.ReLU(),
-        #                                 nn.Linear(8, 2),
-        #                                 nn.ReLU(),
-        #                                 nn.Linear(2, 1),
-        #                                 nn.ReLU(),
-        #                                 )
-        #
-        # self.dense_up = nn.Sequential(nn.Linear(2, 8),
-        #                               nn.ReLU(),
-        #                               nn.Linear(8, 32),
-        #                               nn.ReLU(),
-        #                               nn.Linear(32, 128),
-        #                               nn.ReLU(),
-        #                               nn.Linear(128, 2 * 2 * 128),
-        #                               nn.ReLU())
-        #
-        # self.decoder = nn.Sequential(nn.ConvTranspose2d(128, 128, 4, 2, 1),
-        #                              nn.ReLU(),
-        #                              nn.ConvTranspose2d(128, 64, 4, 2, 1),
-        #                              nn.ReLU(),
-        #                              nn.ConvTranspose2d(64, 32, 4, 2, 1),
-        #                              nn.ReLU(),
-        #                              nn.ConvTranspose2d(32, 16, 4, 2, 1),
-        #                              nn.ReLU(),
-        #                              nn.ConvTranspose2d(16, 8, 4, 2, 1),
-        #                              nn.ReLU(),
-        #                              nn.ConvTranspose2d(8, chs, 4, 2, 1),
-        #                              nn.Sigmoid())
+        self.dense_down = nn.Sequential(nn.Linear(2 * 2 * 128, 128),
+                                        nn.ReLU(),
+                                        nn.Linear(128, 32),
+                                        nn.ReLU(),
+                                        nn.Linear(32, 8),
+                                        nn.ReLU(),
+                                        nn.Linear(8, 2),
+                                        nn.ReLU(),
+                                        nn.Linear(2, 1),
+                                        nn.ReLU(),
+                                        )
+
+        self.dense_up = nn.Sequential(nn.Linear(2, 8),
+                                      nn.ReLU(),
+                                      nn.Linear(8, 32),
+                                      nn.ReLU(),
+                                      nn.Linear(32, 128),
+                                      nn.ReLU(),
+                                      nn.Linear(128, 2 * 2 * 128),
+                                      nn.ReLU())
+
+        self.decoder = nn.Sequential(nn.ConvTranspose2d(128, 128, 4, 2, 1),
+                                     nn.ReLU(),
+                                     nn.ConvTranspose2d(128, 64, 4, 2, 1),
+                                     nn.ReLU(),
+                                     nn.ConvTranspose2d(64, 32, 4, 2, 1),
+                                     nn.ReLU(),
+                                     nn.ConvTranspose2d(32, 16, 4, 2, 1),
+                                     nn.ReLU(),
+                                     nn.ConvTranspose2d(16, 8, 4, 2, 1),
+                                     nn.ReLU(),
+                                     nn.ConvTranspose2d(8, chs, 4, 2, 1),
+                                     nn.Sigmoid())
 
     def forward(self, x, time):
         x = self.encoder(x)
@@ -389,8 +389,7 @@ class FlownetSolver():
             X_image = batch[0].float().to(self.device)
             X_time = batch[1].float().to(self.device) / 33.  # divide by max value of time
 
-            initial_scenes = X_image[:, 3:-1].detach().cpu().numpy()
-            red_ball_gt = X_image[:, -1]
+            scenes = X_image[:, 3:-1].detach().cpu().numpy()
 
             num_times = 3
             X_times = [X_time * i / num_times for i in range(1, num_times + 1)]
@@ -409,35 +408,33 @@ class FlownetSolver():
                 red_ball_collision = X_image[idx, 1][:, :, None].cpu()
                 static_objs = X_image[idx, 2][:, :, None].cpu()
 
-                row.append(np.moveaxis(initial_scenes[idx], 0, 2))
+                collision_scene = np.concatenate([red_ball_collision, green_ball_collision, static_objs], axis=-1)
 
-                empty_channel = np.zeros_like(static_objs)
+                row.append(collision_scene)
 
-                collision_scene = np.concatenate([red_ball_collision, green_ball_collision, empty_channel, static_objs],
-                                                 axis=-1)
-
-                pred_channel = collision_scene.copy()
-                pred_channel[..., 0] = np.max(np.concatenate([pred_channel[..., 0][..., None],
-                                                              red_ball_gt.detach().cpu()[idx, ..., None]], axis=-1),
-                                              axis=-1)
-                # pred_channel[..., 1] = np.max(np.concatenate([pred_channel[..., 1][..., None],
+                # pred_channel = collision_scene.copy()
+                # pred_channel[..., 0] = np.max(np.concatenate([pred_channel[..., 0][..., None],
                 #                                               red_ball_gt.detach().cpu()[idx, ..., None]], axis=-1),
                 #                               axis=-1)
-                pred_channel[..., 2] = np.max(np.concatenate([pred_channel[..., 2][..., None],
-                                                              red_ball_preds[-1].detach().cpu()[idx, 0, ..., None]],
-                                                             axis=-1),
-                                              axis=-1)
-                row.append(pred_channel)
+                # # pred_channel[..., 1] = np.max(np.concatenate([pred_channel[..., 1][..., None],
+                # #                                               red_ball_gt.detach().cpu()[idx, ..., None]], axis=-1),
+                # #                               axis=-1)
+                # pred_channel[..., 2] = np.max(np.concatenate([pred_channel[..., 2][..., None],
+                #                                               red_ball_preds[-1].detach().cpu()[idx, 0, ..., None]],
+                #                                              axis=-1),
+                #                               axis=-1)
+                # row.append(pred_channel)
 
-                for red_ball_pred in reversed(red_ball_preds[:-1]):
-                    pred_channel = collision_scene.copy()
+                for j, red_ball_pred in enumerate(reversed(red_ball_preds)):
+                    pred_channel = scenes[idx, j*4: (j+1)*4, ...].copy()
+                    pred_channel = np.moveaxis(pred_channel, 0, -1)
                     pred_channel[..., 2] = np.max(np.concatenate([pred_channel[..., 2][..., None],
                                                                   red_ball_pred.detach().cpu()[idx, 0, ..., None]],
                                                                  axis=-1),
                                                   axis=-1)
                     row.append(pred_channel)
 
-                rows.append(row)
+                rows.append([row[0]]+row[::-1][:-1])
 
                 if len(rows) == 20:
                     os.makedirs(f"./results/test/PositionModel/visualisation", exist_ok=True)
@@ -450,7 +447,6 @@ class FlownetSolver():
         if self.device == "cuda":
             self.position_model.cuda()
 
-        channels = range(1, 7)
         size = (width, width)
 
         train_loss_log = []
@@ -469,7 +465,7 @@ class FlownetSolver():
         # Load model from ckpt
         self.position_model.load_state_dict(T.load("./checkpoints/PositionModel/50.pt"))
 
-        self.make_visualisations(test_data_loader)
+        # self.make_visualisations(test_data_loader)
 
         rows = []
         pic_no = 1
