@@ -445,6 +445,36 @@ class FlownetSolver():
                     pic_no += 1
                     rows = []
 
+    def simulate_action(self):
+        pass
+
+    def simulate_position_model(self, checkpoint, data_paths, batch_size=32):
+        if self.device == "cuda":
+            self.position_model.cuda()
+
+        size = (self.width, self.width)
+
+        self.position_model.load_state_dict(T.load(checkpoint))
+
+        train_data, test_data = load_data_position(data_paths, self.seq_len, size, all_samples=True)
+
+        train_data_loader = T.utils.data.DataLoader(PosModelDataset(train_data),
+                                                    batch_size, shuffle=True)
+        test_data_loader = T.utils.data.DataLoader(PosModelDataset(test_data),
+                                                   batch_size, shuffle=True)
+
+        for i, batch in enumerate(train_data_loader):
+            X_image = batch[0].float().to(self.device)
+            X_time = batch[1].float().to(self.device) / 109.6
+            X_red_diam = batch[2].float().to(self.device)  # divide by max value of time
+
+            X_time = X_time[:, None, None].repeat(1, self.width, self.width)
+
+            model_input = X_image[:, :3], X_time[:, None]
+            red_ball_gt = X_image[:, -1]
+
+            red_ball_pred = self.position_model(model_input[0], model_input[1])
+
     def train_position_model(self, data_paths, epochs=100, width=64, batch_size=32, smooth_loss=False):
         if self.device == "cuda":
             self.position_model.cuda()

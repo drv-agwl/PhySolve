@@ -5,7 +5,7 @@ import random
 import gzip
 
 
-def load_data_position(data_paths, seq_len, size):
+def load_data_position(data_paths, seq_len, size, all_samples=False):
     channels = range(1, 7)
 
     train_data = []
@@ -90,6 +90,8 @@ def load_data_position(data_paths, seq_len, size):
     random.seed(7)
     random.shuffle(train_data)
 
-    train_data, test_data = train_data[:int(0.9 * len(train_data))], train_data[int(0.9 * len(train_data)):]
+    if all_samples:
+        return train_data
 
+    train_data, test_data = train_data[:int(0.9 * len(train_data))], train_data[int(0.9 * len(train_data)):]
     return train_data, test_data
