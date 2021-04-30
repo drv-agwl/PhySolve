@@ -24,7 +24,7 @@ train_tasks, dev_tasks, test_tasks = phyre.get_fold(eval_setup, fold_id)
 
 tasks = train_tasks + dev_tasks + test_tasks
 
-no_grey_ids = [1, 2, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16]
+no_grey_ids = [0, 1, 2, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16]
 task_ids = [str(i).zfill(5) for i in no_grey_ids]
 tasks_ids = sorted([x for x in tasks if x.startswith(tuple(task_ids))])
 
@@ -152,7 +152,8 @@ for task_idx, task in enumerate(tasks_ids):
                              'scene-33': get_obj_channels(np.array(res.images[collision_timestep * 1 // 3]),
                                                           size=(64, 64)),
                              'scene-66': get_obj_channels(np.array(res.images[collision_timestep * 2 // 3]),
-                                                          size=(64, 64))})
+                                                          size=(64, 64)),
+                             'task-id': task})
 
     file = gzip.GzipFile(f'./Database/{task}.pkl', 'wb')
     pickle.dump(database, file)

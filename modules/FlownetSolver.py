@@ -8,6 +8,7 @@ from utils.phyre_utils import vis_pred_path_task
 import os
 import cv2
 from modules.data_utils import load_data_position
+from PIL import Image, ImageDraw
 
 
 class PosModelDataset(torch.utils.data.Dataset):
@@ -428,7 +429,7 @@ class FlownetSolver():
                 # row.append(pred_channel)
 
                 for j, red_ball_pred in enumerate(reversed(red_ball_preds)):
-                    pred_channel = scenes[idx, j*4: (j+1)*4, ...].copy()
+                    pred_channel = scenes[idx, j * 4: (j + 1) * 4, ...].copy()
                     pred_channel = np.moveaxis(pred_channel, 0, -1)
                     pred_channel[..., 2] = np.max(np.concatenate([pred_channel[..., 2][..., None],
                                                                   red_ball_pred.detach().cpu()[idx, 0, ..., None]],
@@ -436,7 +437,7 @@ class FlownetSolver():
                                                   axis=-1)
                     row.append(pred_channel)
 
-                rows.append([row[0]]+row[::-1][:-1])
+                rows.append([row[0]] + row[::-1][:-1])
 
                 if len(rows) == 20:
                     os.makedirs(f"./results/test/PositionModel/visualisation", exist_ok=True)
@@ -445,8 +446,20 @@ class FlownetSolver():
                     pic_no += 1
                     rows = []
 
-    def simulate_action(self):
-        pass
+    def get_position_pred(self, pred_channel, diam):
+        diam = round(diam[0] * self.width)
+        kernel = Image.new('1', (diam, diam))
+        draw = ImageDraw.Draw(kernel)
+        draw.ellipse((0, 0, diam - 1, diam - 1), fill=1)
+        kernel = np.array(kernel).astype(np.float)
+
+        pred_channel = pred_channel.detach().cpu().numpy()[0][0]
+
+        filtered = cv2.filter2D(src=pred_channel, kernel=kernel, ddepth=-1)
+
+        pred_x, pred_y = np.unravel_index(np.argmax(filtered, axis=None), filtered.shape)
+
+        return pred_x, pred_y
 
     def simulate_position_model(self, checkpoint, data_paths, batch_size=32):
         if self.device == "cuda":
@@ -456,24 +469,26 @@ class FlownetSolver():
 
         self.position_model.load_state_dict(T.load(checkpoint))
 
-        train_data, test_data = load_data_position(data_paths, self.seq_len, size, all_samples=True)
+        data = load_data_position(data_paths, self.seq_len, size, all_samples=True)
 
-        train_data_loader = T.utils.data.DataLoader(PosModelDataset(train_data),
-                                                    batch_size, shuffle=True)
-        test_data_loader = T.utils.data.DataLoader(PosModelDataset(test_data),
-                                                   batch_size, shuffle=True)
+        data_loader = T.utils.data.DataLoader(PosModelDataset(data),
+                                              batch_size, shuffle=True)
 
-        for i, batch in enumerate(train_data_loader):
+        for i, batch in enumerate(data_loader):
             X_image = batch[0].float().to(self.device)
             X_time = batch[1].float().to(self.device) / 109.6
             X_red_diam = batch[2].float().to(self.device)  # divide by max value of time
+            task_id = batch[3]
 
             X_time = X_time[:, None, None].repeat(1, self.width, self.width)
 
             model_input = X_image[:, :3], X_time[:, None]
-            red_ball_gt = X_image[:, -1]
 
             red_ball_pred = self.position_model(model_input[0], model_input[1])
+
+            pred_x, pred_y = self.get_position_pred(red_ball_pred, X_red_diam.cpu().numpy())
+
+            solved = simulate_action(task_id, pred_x, pred_y, X_red_diam/2.)
 
     def train_position_model(self, data_paths, epochs=100, width=64, batch_size=32, smooth_loss=False):
         if self.device == "cuda":
@@ -507,7 +522,7 @@ class FlownetSolver():
             for i, batch in enumerate(train_data_loader):
                 X_image = batch[0].float().to(self.device)
                 X_time = batch[1].float().to(self.device) / 109.6
-                X_red_diam = batch[2].float().to(self.device) # divide by max value of time
+                X_red_diam = batch[2].float().to(self.device)  # divide by max value of time
 
                 X_time = X_time[:, None, None].repeat(1, self.width, self.width)
 

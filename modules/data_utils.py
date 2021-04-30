@@ -10,7 +10,7 @@ def load_data_position(data_paths, seq_len, size, all_samples=False):
 
     train_data = []
 
-    for data_path in data_paths:
+    for data_path in data_paths[:1]:
         with gzip.open(data_path, 'rb') as fp:
             task_data = pickle.load(fp)
         for data in task_data:

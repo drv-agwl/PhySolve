@@ -11,6 +11,10 @@ if __name__ == '__main__':
     paths = [osp.join(data_dir, i) for i in os.listdir(data_dir)]
 
     solver = FlownetSolver(5, 64, "cuda")
-    solver.train_position_model(data_paths=paths,
-                                epochs=100,
-                                smooth_loss=smooth_loss)
+    # solver.train_position_model(data_paths=paths,
+    #                             epochs=100,
+    #                             smooth_loss=smooth_loss)
+
+    solver.simulate_position_model(checkpoint='/home/dhruv/Desktop/PhySolve/checkpoints/PositionModel/40.pt',
+                                   data_paths=paths,
+                                   batch_size=1)
