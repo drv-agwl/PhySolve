@@ -9,6 +9,7 @@ import os
 import cv2
 from modules.data_utils import load_data_position
 from PIL import Image, ImageDraw
+from modules.phyre_utils import simulate_action
 
 
 class PosModelDataset(torch.utils.data.Dataset):
@@ -19,8 +20,9 @@ class PosModelDataset(torch.utils.data.Dataset):
         images = self.data[idx]["Images"]
         collision_time = self.data[idx]["Collision_time"]
         red_diam = self.data[idx]["Red_diam"]
+        task_id = self.data[idx]["task-id"]
 
-        return images, collision_time, red_diam
+        return images, collision_time, red_diam, task_id
 
     def __len__(self):
         return len(self.data)
