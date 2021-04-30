@@ -17,6 +17,7 @@ def load_data_position(data_paths, seq_len, size, all_samples=False):
             obj_channels = data['images_solved']
             collision_time = data["collision_timestep"]
             features = data["features"]
+            task_id = data["task-id"]
 
             scene_0 = data["scene-0"]
             scene_33 = data["scene-33"]
@@ -85,7 +86,8 @@ def load_data_position(data_paths, seq_len, size, all_samples=False):
             red_diam = features[0][-1][3]
             train_data.append({"Images": combined,
                                "Collision_time": collision_time,
-                               "Red_diam": red_diam})
+                               "Red_diam": red_diam,
+                               "task-id": task_id})
 
     random.seed(7)
     random.shuffle(train_data)
