@@ -1,8 +1,8 @@
 import cv2
 import phyre
 import random
-from gSolver import path_cost
-from utils import *
+from DataCollection.gSolver import path_cost
+from DataCollection.utils import *
 import pickle
 import gzip
 
@@ -84,80 +84,82 @@ def get_obj_channels(imgs, size):
     return obj_channels
 
 
-for task_idx, task in enumerate(tasks_ids):
-    database = []
-    solving = True  # collect solving or non-solving task
-    stride = 5  # num frames to skip
-    number_to_solve = 10
-    max_tries = 10000
-    channels = range(1, 7)
+if __name__ == '__main__':
+    for task_idx, task in enumerate(tasks_ids):
+        database = []
+        solving = True  # collect solving or non-solving task
+        stride = 5  # num frames to skip
+        number_to_solve = 10
+        max_tries = 10000
+        channels = range(1, 7)
 
-    data = []
-    print(task)
+        data = []
+        print(task)
 
-    cache = phyre.get_default_100k_cache('ball')
-    actions = cache.action_array
+        cache = phyre.get_default_100k_cache('ball')
+        actions = cache.action_array
 
-    cache_list = actions[cache.load_simulation_states(task) == (1 if solving else -1)]
+        cache_list = actions[cache.load_simulation_states(task) == (1 if solving else -1)]
 
-    solved = 0
+        solved = 0
 
-    tries = 0
-    while solved < number_to_solve:
-        tries += 1
-        actionlist = cache_list
+        tries = 0
+        while solved < number_to_solve:
+            tries += 1
+            actionlist = cache_list
 
-        if len(actionlist) == 0:
-            print("WARNING no solution action in cache at task", task)
-            actionlist = [np.random.rand(3)]
+            if len(actionlist) == 0:
+                print("WARNING no solution action in cache at task", task)
+                actionlist = [np.random.rand(3)]
 
-        action = random.choice(actionlist)
-        res = sim.simulate_action(task_idx, action,
-                                  need_featurized_objects=True, stride=1)
-        try:
-            features = res.featurized_objects.features
-        except:
-            if tries > max_tries:
-                break
-            else:
-                continue
-
-        # IF SOLVED PROCESS ROLLOUT
-        if (res.status.is_solved() == solving) and not res.status.is_invalid():
-            tries = 0
-            solved += 1
-
-            collision_timestep = get_collision_timestep(res)
-            imgs_solved = res.images[range(collision_timestep - 2 * stride, collision_timestep + 3 * stride, stride)]
-            imgs_solved = get_obj_channels(imgs_solved, size=(64, 64))
-
-            features = res.featurized_objects.features[
-                range(collision_timestep - 2 * stride, collision_timestep + 3 * stride, stride)]
-
-            unsolving_action = np.array([0.1, 0.1, 0.0003])
+            action = random.choice(actionlist)
+            res = sim.simulate_action(task_idx, action,
+                                      need_featurized_objects=True, stride=1)
             try:
-                res_unsolved = sim.simulate_action(task_idx, unsolving_action,
-                                                   need_featurized_objects=True, stride=1)
+                features = res.featurized_objects.features
             except:
-                continue
-            imgs_unsolved = res_unsolved.images[
-                range(collision_timestep - 2 * stride, collision_timestep + 3 * stride, stride)]
-            imgs_unsolved = get_obj_channels(imgs_unsolved, size=(64, 64))
+                if tries > max_tries:
+                    break
+                else:
+                    continue
 
-            database.append({'images_solved': np.array(imgs_solved),
-                             'images_unsolved': np.array(imgs_unsolved),
-                             'features': features,
-                             'collision_timestep': collision_timestep / stride,
-                             'scene-0': get_obj_channels(np.array(res.images[0]), size=(64, 64)),
-                             'scene-33': get_obj_channels(np.array(res.images[collision_timestep * 1 // 3]),
-                                                          size=(64, 64)),
-                             'scene-66': get_obj_channels(np.array(res.images[collision_timestep * 2 // 3]),
-                                                          size=(64, 64)),
-                             'task-id': task})
+            # IF SOLVED PROCESS ROLLOUT
+            if (res.status.is_solved() == solving) and not res.status.is_invalid():
+                tries = 0
+                solved += 1
 
-    file = gzip.GzipFile(f'./Database/{task}.pkl', 'wb')
-    pickle.dump(database, file)
-    file.close()
+                collision_timestep = get_collision_timestep(res)
+                imgs_solved = res.images[
+                    range(collision_timestep - 2 * stride, collision_timestep + 3 * stride, stride)]
+                imgs_solved = get_obj_channels(imgs_solved, size=(64, 64))
 
-    # with open() as handle:
-    #     pickle.dump(database, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                features = res.featurized_objects.features[
+                    range(collision_timestep - 2 * stride, collision_timestep + 3 * stride, stride)]
+
+                unsolving_action = np.array([0.1, 0.1, 0.0003])
+                try:
+                    res_unsolved = sim.simulate_action(task_idx, unsolving_action,
+                                                       need_featurized_objects=True, stride=1)
+                except:
+                    continue
+                imgs_unsolved = res_unsolved.images[
+                    range(collision_timestep - 2 * stride, collision_timestep + 3 * stride, stride)]
+                imgs_unsolved = get_obj_channels(imgs_unsolved, size=(64, 64))
+
+                database.append({'images_solved': np.array(imgs_solved),
+                                 'images_unsolved': np.array(imgs_unsolved),
+                                 'features': features,
+                                 'collision_timestep': collision_timestep / stride,
+                                 'scene-0': get_obj_channels(np.array(res.images[0]), size=(64, 64)),
+                                 'scene-33': get_obj_channels(np.array(res.images[collision_timestep * 1 // 3]),
+                                                              size=(64, 64)),
+                                 'scene-66': get_obj_channels(np.array(res.images[collision_timestep * 2 // 3]),
+                                                              size=(64, 64)),
+                                 'task-id': task})
+
+        file = gzip.GzipFile(f'./Database/{task}.pkl', 'wb')
+        pickle.dump(database, file)
+        file.close()
+
+        # with open() as handle:
+        #     pickle.dump(database, handle, protocol=pickle.HIGHEST_PROTOCOL)

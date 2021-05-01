@@ -6,7 +6,7 @@ import os, random
 from PIL import Image, ImageFont, ImageDraw
 import numpy as np
 # from planner.planner_agent import solve, find_dir
-import dijkstra  # in the local folder
+from DataCollection import dijkstra  # in the local folder
 # from ttictoc import tic,toc
 import matplotlib
 # matplotlib.use('MacOSX')
@@ -32,7 +32,7 @@ stride = 1
 save_ind = 500
 font = ImageFont.truetype("./arial.ttf", 10)  # Keyboard.ttf
 
-with open("095_collected_traj_256.pickle", 'rb') as handle:
+with open("/home/dhruv/Desktop/PhySolve/DataCollection/095_collected_traj_256.pickle", 'rb') as handle:
     tr_xy256 = pickle.load(handle)  # ±256 pixel representation of 12x5 trajectories
 
 
