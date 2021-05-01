@@ -476,10 +476,12 @@ class FlownetSolver():
         data = load_data_position(data_paths, self.seq_len, size, all_samples=True)
 
         data_loader = T.utils.data.DataLoader(PosModelDataset(data),
-                                              batch_size, shuffle=True)
+                                              batch_size, shuffle=False)
 
         task_idxs, tasks = [], []
         id = 0
+        metrics_table = {}
+
         for batch in data_loader:
             task_id = batch[3][0]
             if task_id not in tasks:
@@ -487,15 +489,18 @@ class FlownetSolver():
                 tasks.append(task_id)
                 id += 1
 
-        sim = phyre.initialize_simulator(task_idxs, 'ball')
+                metrics_table[task_id.split(':')[0]] = [0, 0]
+
+        sim = phyre.initialize_simulator(tasks, 'ball')
 
         num_solved = 0
-        pbar = tqdm(total=len(data_loader))
+        pbar = tqdm(total=len(tasks))
 
         tasks = []
         id = 0
         for batch in data_loader:
             task_id = batch[3][0]
+            template = task_id.split(":")[0]
 
             if task_id in tasks:
                 continue
@@ -520,12 +525,18 @@ class FlownetSolver():
 
             if solved:
                 num_solved += 1
+                metrics_table[template][0] += 1
 
+            metrics_table[template][1] += 1
             id += 1
             pbar.update(1)
 
         pbar.close()
-        print(num_solved * 100. / len(data_loader))
+        print("Overall: ", num_solved * 100. / len(tasks))
+        print()
+
+        for template, val in metrics_table.items():
+            print(template, ": ", val[0]*100./val[1])
 
     def train_position_model(self, data_paths, epochs=100, width=64, batch_size=32, smooth_loss=False):
         if self.device == "cuda":
@@ -632,7 +643,7 @@ class FlownetSolver():
 
                 red_ball_pred = self.position_model(model_input[0], model_input[1])
 
-                loss = F.binary_cross_entropy(red_ball_pred.squeeze(1), red_ball_gt, weight=10)
+                loss = F.binary_cross_entropy(red_ball_pred.squeeze(1), red_ball_gt)
                 losses.append(loss.item())
 
                 # Visualisation
