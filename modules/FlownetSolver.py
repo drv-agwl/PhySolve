@@ -8,13 +8,29 @@ import torch.nn.functional as F
 from utils.phyre_utils import vis_pred_path_task
 import os
 import cv2
-from modules.data_utils import load_data_position
+from modules.data_utils import load_data_position, load_data_collision
 from PIL import Image, ImageDraw
 from modules.phyre_utils import simulate_action
 from tqdm import tqdm
 
 
 class PosModelDataset(torch.utils.data.Dataset):
+    def __init__(self, data):
+        self.data = data
+
+    def __getitem__(self, idx):
+        images = self.data[idx]["Images"]
+        collision_time = self.data[idx]["Collision_time"]
+        red_diam = self.data[idx]["Red_diam"]
+        task_id = self.data[idx]["task-id"]
+
+        return images, collision_time, red_diam, task_id
+
+    def __len__(self):
+        return len(self.data)
+
+
+class CollisionDataset(torch.utils.data.Dataset):
     def __init__(self, data):
         self.data = data
 
@@ -183,11 +199,10 @@ class FlownetSolver():
 
         print("succesfully initialized models")
 
-    def train_collision_model(self, data_paths, epochs=100, width=128, batch_size=32, num_pred_steps=4):
+    def train_collision_model(self, data_paths, epochs=100, width=128, batch_size=32):
         if self.device == "cuda":
             self.collision_model.cuda()
 
-        channels = range(1, 7)
         size = (width, width)
 
         train_loss_log = []
@@ -195,55 +210,8 @@ class FlownetSolver():
 
         opti = T.optim.Adam(self.collision_model.parameters(recurse=True), lr=3e-4)
 
-        train_data = []
-        for data_path in data_paths:
-            with open(data_path, 'rb') as handle:
-                task_data = pickle.load(handle)
-            for data in task_data:
-                frames_solved = data['images_solved']
-                frames_unsolved = data['images_unsolved']
+        train_data, test_data = load_data_position(data_paths, self.seq_len, size)
 
-                obj_channels_solved = np.array(
-                    [np.array([cv2.resize((frame == ch).astype(float), size, cv2.INTER_MAX) for ch in channels]) for
-                     frame in frames_solved])
-                obj_channels_solved = np.flip(obj_channels_solved, axis=2)
-
-                obj_channels_unsolved = np.array(
-                    [np.array([cv2.resize((frame == ch).astype(float), size, cv2.INTER_MAX) for ch in channels]) for
-                     frame in frames_unsolved])
-                obj_channels_unsolved = np.flip(obj_channels_unsolved, axis=2)
-
-                if data_path.split('.')[0][-1] == '2':  # Task-2:
-                    green_ball_idx = 1
-                    red_ball_idx = 0
-                    static_obj_idxs = [3, 5]
-                elif data_path.split('.')[0][-1] == '0':  # Task-20
-                    green_ball_idx = 1
-                    red_ball_idx = 0
-                    static_obj_idxs = [3, 5]
-                elif data_path.split('.')[0][-1] == '5':  # Task-15
-                    green_ball_idx = 1
-                    red_ball_idx = 0
-                    static_obj_idxs = [3, 5]
-
-                green_ball_solved = obj_channels_solved[:, green_ball_idx].astype(np.uint8)
-                green_ball_unsolved = obj_channels_unsolved[:, green_ball_idx].astype(np.uint8)
-                red_ball_gt = np.flip(obj_channels_solved[:self.seq_len // 2 + 1, red_ball_idx], axis=0).astype(
-                    np.uint8)
-                static_objs = np.max(obj_channels_solved[0, static_obj_idxs, :, :][None], axis=1).astype(np.uint8)
-                red_ball_zeros = np.zeros_like(red_ball_gt).astype(np.uint8)
-
-                combined = np.concatenate([green_ball_solved, green_ball_unsolved, static_objs, red_ball_zeros,
-                                           red_ball_gt], axis=0).astype(np.uint8)
-                train_data.append(combined)
-
-        np.random.seed(7)
-        np.random.shuffle(train_data)
-
-        train_data, test_data = train_data[:int(0.9 * len(train_data))], train_data[int(0.9 * len(train_data)):]
-
-        train_data = T.tensor(np.array(train_data))
-        test_data = T.tensor(np.array(test_data))
         train_data_loader = T.utils.data.DataLoader(T.utils.data.TensorDataset(train_data),
                                                     batch_size, shuffle=True)
         test_data_loader = T.utils.data.DataLoader(T.utils.data.TensorDataset(test_data),
@@ -464,6 +432,19 @@ class FlownetSolver():
         pred_y, pred_x = np.unravel_index(np.argmax(filtered, axis=None), filtered.shape)
 
         return pred_x, pred_y
+
+    def simulate_collision_model(self, checkpoint, data_paths, batch_size=32):
+        if self.device == "cuda":
+            self.collision_model.cuda()
+
+        size = (self.width, self.width)
+
+        self.collision_model.load_state_dict(T.load(checkpoint))
+
+        data = load_data_collision(data_paths, self.seq_len, size, all_samples=True)
+
+        data_loader = T.utils.data.DataLoader(PosModelDataset(data),
+                                              batch_size, shuffle=False)
 
     def simulate_position_model(self, checkpoint, data_paths, batch_size=32):
         if self.device == "cuda":

@@ -5,6 +5,56 @@ import random
 import gzip
 
 
+def load_data_collision(data_paths, seq_len, size):
+    channels = range(1, 7)
+    train_data = []
+    for data_path in data_paths:
+        with open(data_path, 'rb') as handle:
+            task_data = pickle.load(handle)
+        for data in task_data:
+            frames_solved = data['images_solved']
+            frames_unsolved = data['images_unsolved']
+            features = data["features"]
+            task_id = data["task-id"]
+
+            obj_channels_solved = np.array(
+                [np.array([cv2.resize((frame == ch).astype(float), size, cv2.INTER_MAX) for ch in channels]) for
+                 frame in frames_solved])
+            obj_channels_solved = np.flip(obj_channels_solved, axis=2)
+
+            obj_channels_unsolved = np.array(
+                [np.array([cv2.resize((frame == ch).astype(float), size, cv2.INTER_MAX) for ch in channels]) for
+                 frame in frames_unsolved])
+            obj_channels_unsolved = np.flip(obj_channels_unsolved, axis=2)
+
+            green_ball_idx = 1
+            red_ball_idx = 0
+            static_obj_idxs = [3, 5]
+
+            green_ball_solved = obj_channels_solved[:, green_ball_idx].astype(np.uint8)
+            green_ball_unsolved = obj_channels_unsolved[:, green_ball_idx].astype(np.uint8)
+            red_ball_gt = np.flip(obj_channels_solved[:seq_len // 2 + 1, red_ball_idx], axis=0).astype(
+                np.uint8)
+            static_objs = np.max(obj_channels_solved[0, static_obj_idxs, :, :][None], axis=1).astype(np.uint8)
+            red_ball_zeros = np.zeros_like(red_ball_gt).astype(np.uint8)
+
+            combined = np.concatenate([green_ball_solved, green_ball_unsolved, static_objs, red_ball_zeros,
+                                       red_ball_gt], axis=0).astype(np.uint8)
+            train_data.append(combined)
+
+            red_diam = features[0][-1][3]
+            train_data.append({"Images": combined,
+                               "Red_diam": red_diam,
+                               "task-id": task_id})
+
+    np.random.seed(7)
+    np.random.shuffle(train_data)
+
+    train_data, test_data = train_data[:int(0.9 * len(train_data))], train_data[int(0.9 * len(train_data)):]
+
+    return train_data, test_data
+
+
 def load_data_position(data_paths, seq_len, size, all_samples=False):
     channels = range(1, 7)
 

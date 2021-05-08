@@ -15,6 +15,10 @@ if __name__ == '__main__':
     #                             epochs=100,
     #                             smooth_loss=smooth_loss)
 
-    solver.simulate_position_model(checkpoint='/home/dhruv/Desktop/PhySolve/checkpoints/PositionModel/40.pt',
-                                   data_paths=paths,
-                                   batch_size=1)
+    # solver.simulate_position_model(checkpoint='/home/dhruv/Desktop/PhySolve/checkpoints/PositionModel/60.pt',
+    #                                data_paths=paths,
+    #                                batch_size=1)
+
+    solver.simulate_collision_model(checkpoint='/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/60.pt',
+                                    data_paths=paths,
+                                    batch_size=1)
