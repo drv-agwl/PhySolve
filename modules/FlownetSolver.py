@@ -515,7 +515,7 @@ class FlownetSolver:
 
         sim = phyre.initialize_simulator(tasks, 'ball')
 
-        num_solved = 0
+        num_solved = num_collided = 0
         pbar = tqdm(total=len(tasks))
 
         tasks = []
@@ -562,20 +562,24 @@ class FlownetSolver:
                                                pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
                                                X_red_diam / 2.)
 
+            if collided:
+                num_collided += 1
+                metrics_table[template][0][0] += 1
             if solved:
                 num_solved += 1
-                metrics_table[template][0] += 1
+                metrics_table[template][1][0] += 1
 
-            metrics_table[template][1] += 1
+            metrics_table[template][0][1] += 1
+            metrics_table[template][1][1] += 1
             id += 1
             pbar.update(1)
 
         pbar.close()
-        print("Overall: ", num_solved * 100. / len(tasks))
+        print("Overall: ", num_collided * 100. / len(tasks), " ", num_solved * 100. / len(tasks))
         print()
 
         for template, val in metrics_table.items():
-            print(template, ": ", val[0] * 100. / val[1])
+            print(template, ": ", val[0][0] * 100. / val[0][1], " ", val[1][0] * 100. / val[1][1])
 
     def simulate_position_model(self, checkpoint, data_paths, batch_size=32):
         if self.device == "cuda":
