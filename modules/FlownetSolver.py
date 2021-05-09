@@ -511,7 +511,7 @@ class FlownetSolver:
                 tasks.append(task_id)
                 id += 1
 
-                metrics_table[task_id.split(':')[0]] = [0, 0]
+                metrics_table[task_id.split(':')[0]] = [[0, 0], [0, 0]]
 
         sim = phyre.initialize_simulator(tasks, 'ball')
 
@@ -553,14 +553,14 @@ class FlownetSolver:
             X_time = X_time[:, None, None].repeat(1, self.width, self.width)
 
             model_input = X_image[:, :3], X_time[:, None]
-            model_input[:, 1] = red_channel_collision  # Replace ground truth with collision model prediction
+            # model_input[0][:, 1] = torch.tensor(red_channel_collision).to(self.device)  # Replace ground truth with collision model prediction
 
             red_ball_pred = self.position_model(model_input[0], model_input[1])
 
             pred_y, pred_x = self.get_position_pred(red_ball_pred, X_red_diam.cpu().numpy())
-            solved = simulate_action(sim, id,
-                                     pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
-                                     X_red_diam / 2.)
+            collided, solved = simulate_action(sim, id,
+                                               pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
+                                               X_red_diam / 2.)
 
             if solved:
                 num_solved += 1
