@@ -14,7 +14,7 @@ def draw_ball(size, y, x, r):
     return np.asarray(img)
 
 
-def load_data_collision(data_paths, seq_len, size, all_samples=False):
+def load_data_collision(data_paths, seq_len, size, all_samples=False, shuffle=True):
     channels = range(1, 7)
     train_data = []
     for data_path in sorted(data_paths):
@@ -55,8 +55,9 @@ def load_data_collision(data_paths, seq_len, size, all_samples=False):
                                "Red_diam": red_diam,
                                "task-id": task_id})
 
-    np.random.seed(7)
-    np.random.shuffle(train_data)
+    if shuffle:
+        np.random.seed(7)
+        np.random.shuffle(train_data)
 
     if all_samples:
         return train_data
@@ -65,7 +66,7 @@ def load_data_collision(data_paths, seq_len, size, all_samples=False):
     return train_data, test_data
 
 
-def load_data_position(data_paths, seq_len, size, all_samples=False):
+def load_data_position(data_paths, seq_len, size, all_samples=False, shuffle=True):
     channels = range(1, 7)
 
     train_data = []
@@ -149,8 +150,9 @@ def load_data_position(data_paths, seq_len, size, all_samples=False):
                                "Red_diam": red_diam,
                                "task-id": task_id})
 
-    random.seed(7)
-    random.shuffle(train_data)
+    if shuffle:
+        random.seed(7)
+        random.shuffle(train_data)
 
     if all_samples:
         return train_data
