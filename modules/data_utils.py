@@ -3,29 +3,38 @@ import numpy as np
 import cv2
 import random
 import gzip
+from PIL import Image, ImageDraw
 
 
-def load_data_collision(data_paths, seq_len, size):
+def draw_ball(size, y, x, r):
+    background = np.zeros(size)
+    img = Image.fromarray(background)
+    draw = ImageDraw.Draw(img)
+    draw.ellipse([(x-r, y-r), (x+r, y+r)], fill=1.)
+    return np.asarray(img)
+
+
+def load_data_collision(data_paths, seq_len, size, all_samples=False):
     channels = range(1, 7)
     train_data = []
-    for data_path in data_paths:
-        with open(data_path, 'rb') as handle:
-            task_data = pickle.load(handle)
+    for data_path in sorted(data_paths):
+        with gzip.open(data_path, 'rb') as fp:
+            task_data = pickle.load(fp)
         for data in task_data:
-            frames_solved = data['images_solved']
-            frames_unsolved = data['images_unsolved']
+            obj_channels_solved = data['images_solved']
+            obj_channels_unsolved = data['images_unsolved']
             features = data["features"]
             task_id = data["task-id"]
 
-            obj_channels_solved = np.array(
-                [np.array([cv2.resize((frame == ch).astype(float), size, cv2.INTER_MAX) for ch in channels]) for
-                 frame in frames_solved])
-            obj_channels_solved = np.flip(obj_channels_solved, axis=2)
-
-            obj_channels_unsolved = np.array(
-                [np.array([cv2.resize((frame == ch).astype(float), size, cv2.INTER_MAX) for ch in channels]) for
-                 frame in frames_unsolved])
-            obj_channels_unsolved = np.flip(obj_channels_unsolved, axis=2)
+            # obj_channels_solved = np.array(
+            #     [np.array([cv2.resize((frame == ch).astype(float), size, cv2.INTER_MAX) for ch in channels]) for
+            #      frame in frames_solved])
+            # obj_channels_solved = np.flip(obj_channels_solved, axis=2)
+            #
+            # obj_channels_unsolved = np.array(
+            #     [np.array([cv2.resize((frame == ch).astype(float), size, cv2.INTER_MAX) for ch in channels]) for
+            #      frame in frames_unsolved])
+            # obj_channels_unsolved = np.flip(obj_channels_unsolved, axis=2)
 
             green_ball_idx = 1
             red_ball_idx = 0
@@ -40,7 +49,6 @@ def load_data_collision(data_paths, seq_len, size):
 
             combined = np.concatenate([green_ball_solved, green_ball_unsolved, static_objs, red_ball_zeros,
                                        red_ball_gt], axis=0).astype(np.uint8)
-            train_data.append(combined)
 
             red_diam = features[0][-1][3]
             train_data.append({"Images": combined,
@@ -50,8 +58,10 @@ def load_data_collision(data_paths, seq_len, size):
     np.random.seed(7)
     np.random.shuffle(train_data)
 
-    train_data, test_data = train_data[:int(0.9 * len(train_data))], train_data[int(0.9 * len(train_data)):]
+    if all_samples:
+        return train_data
 
+    train_data, test_data = train_data[:int(0.9 * len(train_data))], train_data[int(0.9 * len(train_data)):]
     return train_data, test_data
 
 
@@ -60,7 +70,7 @@ def load_data_position(data_paths, seq_len, size, all_samples=False):
 
     train_data = []
 
-    for data_path in data_paths:
+    for data_path in sorted(data_paths):
         with gzip.open(data_path, 'rb') as fp:
             task_data = pickle.load(fp)
         for data in task_data:

@@ -12,6 +12,7 @@ from modules.data_utils import load_data_position, load_data_collision
 from PIL import Image, ImageDraw
 from modules.phyre_utils import simulate_action
 from tqdm import tqdm
+from modules.data_utils import draw_ball
 
 
 class PosModelDataset(torch.utils.data.Dataset):
@@ -36,11 +37,25 @@ class CollisionDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         images = self.data[idx]["Images"]
-        collision_time = self.data[idx]["Collision_time"]
         red_diam = self.data[idx]["Red_diam"]
         task_id = self.data[idx]["task-id"]
 
-        return images, collision_time, red_diam, task_id
+        return images, red_diam, task_id
+
+    def __len__(self):
+        return len(self.data)
+
+
+class CollisionDataset(torch.utils.data.Dataset):
+    def __init__(self, data):
+        self.data = data
+
+    def __getitem__(self, idx):
+        images = self.data[idx]["Images"]
+        red_diam = self.data[idx]["Red_diam"]
+        task_id = self.data[idx]["task-id"]
+
+        return images, red_diam, task_id
 
     def __len__(self):
         return len(self.data)
@@ -179,7 +194,7 @@ def rescale(x):
     return (x - x.min()) / (x.max() - x.min())
 
 
-class FlownetSolver():
+class FlownetSolver:
     def __init__(self, seq_len, width, device, hidfac=1, viz=100):
         super().__init__()
         self.device = ("cuda" if T.cuda.is_available() else "cpu") if device == "cuda" else "cpu"
@@ -199,7 +214,7 @@ class FlownetSolver():
 
         print("succesfully initialized models")
 
-    def train_collision_model(self, data_paths, epochs=100, width=128, batch_size=32):
+    def train_collision_model(self, data_paths, epochs=100, width=128, batch_size=32, smooth_loss=False):
         if self.device == "cuda":
             self.collision_model.cuda()
 
@@ -209,12 +224,13 @@ class FlownetSolver():
         val_loss_log = []
 
         opti = T.optim.Adam(self.collision_model.parameters(recurse=True), lr=3e-4)
+        scheduler = T.optim.lr_scheduler.ReduceLROnPlateau(opti, 'min', patience=5, verbose=True)
 
-        train_data, test_data = load_data_position(data_paths, self.seq_len, size)
+        train_data, test_data = load_data_collision(data_paths, self.seq_len, size)
 
-        train_data_loader = T.utils.data.DataLoader(T.utils.data.TensorDataset(train_data),
+        train_data_loader = T.utils.data.DataLoader(CollisionDataset(train_data),
                                                     batch_size, shuffle=True)
-        test_data_loader = T.utils.data.DataLoader(T.utils.data.TensorDataset(test_data),
+        test_data_loader = T.utils.data.DataLoader(CollisionDataset(test_data),
                                                    batch_size, shuffle=True)
 
         # Load model from ckpt
@@ -225,17 +241,21 @@ class FlownetSolver():
         for epoch in range(epochs):
             print("Training")
             losses = []
-            for i, (X,) in enumerate(train_data_loader):
-                X = X.float().to(self.device)
+            for i, batch in enumerate(train_data_loader):
+                X_image = batch[0].float().to(self.device)
 
                 num_steps = self.seq_len // 2 + 1
-                model_input = X[:, :2 * self.seq_len + 1 + num_steps]
-                red_ball_gt = X[:, 2 * self.seq_len + 1 + num_steps:]
+                model_input = X_image[:, :2 * self.seq_len + 1 + num_steps]
+                red_ball_gt = X_image[:, 2 * self.seq_len + 1 + num_steps:]
 
                 red_ball_preds = []
-                for timestep in range(num_steps):
+                for timestep in range(1):
                     red_ball_pred = self.collision_model(model_input)
                     red_ball_preds.append(red_ball_pred)
+
+                    if smooth_loss:
+                        red_ball_gt += 0.005
+                        red_ball_gt = torch.clamp(red_ball_gt, 0., 1.)
 
                     loss = F.binary_cross_entropy(red_ball_pred[:, 0], red_ball_gt[:, timestep])
                     losses.append(loss.item())
@@ -249,16 +269,16 @@ class FlownetSolver():
                 # Visualisation
                 row = []
 
-                green_ball_collision = X[-1, :self.seq_len][self.seq_len // 2][:, :, None].cpu()
-                red_ball_collision = X[-1, 2 * self.seq_len + 1][:, :, None].cpu()
-                static_objs = X[-1, 2 * self.seq_len][:, :, None].cpu()
+                green_ball_collision = X_image[-1, :self.seq_len][self.seq_len // 2][:, :, None].cpu()
+                red_ball_collision = X_image[-1, 2 * self.seq_len + 1][:, :, None].cpu()
+                static_objs = X_image[-1, 2 * self.seq_len][:, :, None].cpu()
 
                 collision_scene = np.concatenate([red_ball_collision, green_ball_collision, static_objs], axis=-1)
 
                 row.append(collision_scene)
 
                 empty_channel = np.zeros_like(static_objs)
-                for timestep in range(num_steps):
+                for timestep in range(1):
                     red_ball_pred_channel = red_ball_preds[timestep][-1, 0][:, :, None].detach().cpu()
                     pred_scene = np.concatenate([red_ball_pred_channel, empty_channel, empty_channel], axis=-1)
 
@@ -285,12 +305,12 @@ class FlownetSolver():
             print("Validation")
             os.makedirs("./checkpoints/CollisionModel", exist_ok=True)
             T.save(self.collision_model.state_dict(), f"./checkpoints/CollisionModel/{epoch + 1}.pt")
-            for i, (X,) in enumerate(test_data_loader):
-                X = X.float().to(self.device)
+            for i, batch in enumerate(test_data_loader):
+                X_image = batch[0].float().to(self.device)
 
                 num_steps = self.seq_len // 2 + 1
-                model_input = X[:, :2 * self.seq_len + 1 + num_steps]
-                red_ball_gt = X[:, 2 * self.seq_len + 1 + num_steps:]
+                model_input = X_image[:, :2 * self.seq_len + 1 + num_steps]
+                red_ball_gt = X_image[:, 2 * self.seq_len + 1 + num_steps:]
 
                 red_ball_preds = []
                 for timestep in range(num_steps):
@@ -305,15 +325,15 @@ class FlownetSolver():
                 # Visualisation
                 row = []
 
-                green_ball_collision = X[-1, :self.seq_len][self.seq_len // 2][:, :, None].cpu()
-                red_ball_collision = X[-1, 2 * self.seq_len + 1][:, :, None].cpu()
-                static_objs = X[-1, 2 * self.seq_len][:, :, None].cpu()
+                green_ball_collision = X_image[-1, :self.seq_len][self.seq_len // 2][:, :, None].cpu()
+                red_ball_collision = X_image[-1, 2 * self.seq_len + 1][:, :, None].cpu()
+                static_objs = X_image[-1, 2 * self.seq_len][:, :, None].cpu()
 
                 collision_scene = np.concatenate([red_ball_collision, green_ball_collision, static_objs], axis=-1)
 
                 row.append(collision_scene)
 
-                empty_channel = np.zeros((width, width, 1))
+                empty_channel = np.zeros((64, 64, 1))
                 red_ball_movements = []
                 for timestep in range(1, num_steps):
                     red_ball_movement = rescale(red_ball_preds[timestep][-1, 0][:, :, None].detach().cpu() - \
@@ -328,8 +348,8 @@ class FlownetSolver():
                     if timestep > 0:
                         row.append(red_ball_movements[timestep - 1])
 
-                green_ball_solved = X[-1, :self.seq_len].cpu()
-                green_ball_unsolved = X[-1, self.seq_len: 2 * self.seq_len].cpu()
+                green_ball_solved = X_image[-1, :self.seq_len].cpu()
+                green_ball_unsolved = X_image[-1, self.seq_len: 2 * self.seq_len].cpu()
                 green_ball_paths = np.max(np.concatenate([green_ball_solved, green_ball_unsolved], axis=0), axis=0)[:,
                                    :, None]
 
@@ -347,7 +367,9 @@ class FlownetSolver():
                     pic_no += 1
                     rows = []
 
-            val_loss_log.append(sum(losses) / len(losses))
+            val_loss = sum(losses) / len(losses)
+            val_loss_log.append(val_loss)
+            scheduler.step(val_loss)
 
             pic_no = 1
 
@@ -433,7 +455,7 @@ class FlownetSolver():
 
         return pred_x, pred_y
 
-    def simulate_collision_model(self, checkpoint, data_paths, batch_size=32):
+    def get_collision_model_preds(self, checkpoint, data_paths, batch_size=32):
         if self.device == "cuda":
             self.collision_model.cuda()
 
@@ -443,8 +465,117 @@ class FlownetSolver():
 
         data = load_data_collision(data_paths, self.seq_len, size, all_samples=True)
 
-        data_loader = T.utils.data.DataLoader(PosModelDataset(data),
+        data_loader = T.utils.data.DataLoader(CollisionDataset(data),
                                               batch_size, shuffle=False)
+
+        for i, batch in enumerate(data_loader):
+            X_image = batch[0].float().to(self.device)
+            X_red_diam = batch[1].float().to(self.device)
+
+            num_steps = self.seq_len // 2 + 1
+            model_input = X_image[:, :2 * self.seq_len + 1 + num_steps]
+
+            red_ball_preds = []
+            for timestep in range(1):
+                red_ball_pred = self.collision_model(model_input)
+                red_ball_preds.append(red_ball_pred)
+
+            pred_y, pred_x = self.get_position_pred(red_ball_preds[0], X_red_diam.cpu().numpy())
+
+    def simulate_combined(self, collision_ckpt, position_ckpt, data_paths, batch_size=32):
+        if self.device == "cuda":
+            self.collision_model.cuda()
+            self.position_model.cuda()
+
+        size = (self.width, self.width)
+
+        self.collision_model.load_state_dict(T.load(collision_ckpt))
+        self.position_model.load_state_dict(T.load(position_ckpt))
+
+        data_collision = load_data_collision(data_paths, self.seq_len, size, all_samples=True)
+        data_position = load_data_position(data_paths, self.seq_len, size, all_samples=True)
+
+        collision_data_loader = T.utils.data.DataLoader(CollisionDataset(data_collision),
+                                                        batch_size, shuffle=False)
+        position_data_loader = T.utils.data.DataLoader(PosModelDataset(data_position),
+                                                       batch_size, shuffle=False)
+
+        task_idxs, tasks = [], []
+        id = 0
+        metrics_table = {}
+
+        for batch in position_data_loader:
+            task_id = batch[3][0]
+            if task_id not in tasks:
+                task_idxs.append(id)
+                tasks.append(task_id)
+                id += 1
+
+                metrics_table[task_id.split(':')[0]] = [0, 0]
+
+        sim = phyre.initialize_simulator(tasks, 'ball')
+
+        num_solved = 0
+        pbar = tqdm(total=len(tasks))
+
+        tasks = []
+        id = 0
+        for batch_collision, batch_position in zip(collision_data_loader, position_data_loader):
+            assert batch_position[-1] == batch_collision[-1]
+            task_id = batch_position[3][0]
+            template = task_id.split(":")[0]
+
+            if task_id in tasks:
+                continue
+
+            tasks.append(task_id)
+
+            # Collision model prediction
+            X_image = batch_collision[0].float().to(self.device)
+            X_red_diam = batch_collision[1].float().to(self.device)
+
+            num_steps = self.seq_len // 2 + 1
+            model_input = X_image[:, :2 * self.seq_len + 1 + num_steps]
+
+            red_ball_preds = []
+            for timestep in range(1):
+                red_ball_pred = self.collision_model(model_input)
+                red_ball_preds.append(red_ball_pred)
+
+            pred_x, pred_y = self.get_position_pred(red_ball_preds[0], X_red_diam.cpu().numpy())
+            red_channel_collision = draw_ball(size, pred_y, pred_x,
+                                              X_red_diam.cpu().numpy() * size[0] / 2.)  # Output of collision model
+
+            # Position Model
+            X_image = batch_position[0].float().to(self.device)
+            X_time = batch_position[1].float().to(self.device) / 109.6  # divide by max value of time
+
+            X_time = X_time[:, None, None].repeat(1, self.width, self.width)
+
+            model_input = X_image[:, :3], X_time[:, None]
+            model_input[:, 1] = red_channel_collision  # Replace ground truth with collision model prediction
+
+            red_ball_pred = self.position_model(model_input[0], model_input[1])
+
+            pred_y, pred_x = self.get_position_pred(red_ball_pred, X_red_diam.cpu().numpy())
+            solved = simulate_action(sim, id,
+                                     pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
+                                     X_red_diam / 2.)
+
+            if solved:
+                num_solved += 1
+                metrics_table[template][0] += 1
+
+            metrics_table[template][1] += 1
+            id += 1
+            pbar.update(1)
+
+        pbar.close()
+        print("Overall: ", num_solved * 100. / len(tasks))
+        print()
+
+        for template, val in metrics_table.items():
+            print(template, ": ", val[0] * 100. / val[1])
 
     def simulate_position_model(self, checkpoint, data_paths, batch_size=32):
         if self.device == "cuda":
@@ -517,7 +648,7 @@ class FlownetSolver():
         print()
 
         for template, val in metrics_table.items():
-            print(template, ": ", val[0]*100./val[1])
+            print(template, ": ", val[0] * 100. / val[1])
 
     def train_position_model(self, data_paths, epochs=100, width=64, batch_size=32, smooth_loss=False):
         if self.device == "cuda":
