@@ -1,7 +1,7 @@
 import pickle
 import matplotlib.pyplot as plt
 
-with open("./logs/PositionModel/100.pkl", "rb") as f:
+with open("./logs/CollisionModel/100.pkl", "rb") as f:
     data = pickle.load(f)
 
 train_losses = data["Train losses"]

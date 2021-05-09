@@ -13,6 +13,7 @@ from PIL import Image, ImageDraw
 from modules.phyre_utils import simulate_action
 from tqdm import tqdm
 from modules.data_utils import draw_ball
+import pandas as pd
 
 
 class PosModelDataset(torch.utils.data.Dataset):
@@ -519,10 +520,13 @@ class FlownetSolver:
         pbar = tqdm(total=len(tasks))
 
         tasks = []
+        doubt_ids = []
+
         id = 0
         for batch_collision, batch_position in zip(collision_data_loader, position_data_loader):
             assert batch_position[-1] == batch_collision[-1]
             task_id = batch_position[3][0]
+
             template = task_id.split(":")[0]
 
             if task_id in tasks:
@@ -553,7 +557,8 @@ class FlownetSolver:
             X_time = X_time[:, None, None].repeat(1, self.width, self.width)
 
             model_input = X_image[:, :3], X_time[:, None]
-            # model_input[0][:, 1] = torch.tensor(red_channel_collision).to(self.device)  # Replace ground truth with collision model prediction
+            model_input[0][:, 1] = torch.tensor(red_channel_collision).to(self.device)  # Replace ground truth with
+            # collision model prediction
 
             red_ball_pred = self.position_model(model_input[0], model_input[1])
 
@@ -568,6 +573,8 @@ class FlownetSolver:
             if solved:
                 num_solved += 1
                 metrics_table[template][1][0] += 1
+            if not collided and solved:
+                doubt_ids.append(task_id)
 
             metrics_table[template][0][1] += 1
             metrics_table[template][1][1] += 1
@@ -578,8 +585,13 @@ class FlownetSolver:
         print("Overall: ", num_collided * 100. / len(tasks), " ", num_solved * 100. / len(tasks))
         print()
 
+        success = []
         for template, val in metrics_table.items():
-            print(template, ": ", val[0][0] * 100. / val[0][1], " ", val[1][0] * 100. / val[1][1])
+            row = [template, round(val[0][0] * 100. / val[0][1], 2), round(val[1][0] * 100. / val[1][1], 2)]
+            success.append(row)
+
+        df = pd.DataFrame(success, columns=["Template", "Collision success", "Solved success"])
+        df.to_csv("./success_combined.csv", index=False)
 
     def simulate_position_model(self, checkpoint, data_paths, batch_size=32):
         if self.device == "cuda":

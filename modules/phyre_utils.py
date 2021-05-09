@@ -17,7 +17,7 @@ def simulate_action(sim, task_idx, x, y, r):
         res = sim.simulate_action(task_idx, action, need_featurized_objects=True, stride=1)
         if get_collision_timestep(res) != -1:
             collided = 1
-        if res.status.is_solved:
+        if res.status.is_solved():
             solved = 1
         return collided, solved
     except:

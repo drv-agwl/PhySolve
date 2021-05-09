@@ -27,7 +27,7 @@ if __name__ == '__main__':
     #                                 data_paths=paths,
     #                                 batch_size=1)
 
-    solver.simulate_combined(collision_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/60.pt",
-                             position_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/PositionModel/60.pt",
+    solver.simulate_combined(collision_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/24.pt",
+                             position_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/PositionModel/32.pt",
                              data_paths=paths,
                              batch_size=1)
