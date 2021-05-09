@@ -492,8 +492,8 @@ class FlownetSolver:
         self.collision_model.load_state_dict(T.load(collision_ckpt))
         self.position_model.load_state_dict(T.load(position_ckpt))
 
-        data_collision = load_data_collision(data_paths, self.seq_len, size, all_samples=True)
-        data_position = load_data_position(data_paths, self.seq_len, size, all_samples=True)
+        data_collision = load_data_collision(data_paths, self.seq_len, size, all_samples=True, shuffle=False)
+        data_position = load_data_position(data_paths, self.seq_len, size, all_samples=True, shuffle=False)
 
         collision_data_loader = T.utils.data.DataLoader(CollisionDataset(data_collision),
                                                         batch_size, shuffle=False)
