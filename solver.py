@@ -31,4 +31,4 @@ if __name__ == '__main__':
                              position_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/PositionModel/32.pt",
                              data_paths=paths,
                              batch_size=1,
-                             save_rollout_dir="/home/dhruv/Desktop/PhySolve/results/saved_rollouts")
+                             save_rollouts_dir="/home/dhruv/Desktop/PhySolve/results/saved_rollouts")
