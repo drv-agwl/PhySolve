@@ -483,7 +483,8 @@ class FlownetSolver:
 
             pred_y, pred_x = self.get_position_pred(red_ball_preds[0], X_red_diam.cpu().numpy())
 
-    def simulate_combined(self, collision_ckpt, position_ckpt, data_paths, batch_size=32):
+    def simulate_combined(self, collision_ckpt, position_ckpt, data_paths, batch_size=32,
+                          save_rollout_dir="/home/dhruv/Desktop/PhySolve/results/saved_rollouts"):
         if self.device == "cuda":
             self.collision_model.cuda().eval()
             self.position_model.cuda().eval()
@@ -565,7 +566,7 @@ class FlownetSolver:
             pred_y, pred_x = self.get_position_pred(red_ball_pred, X_red_diam.cpu().numpy())
             collided, solved = simulate_action(sim, id,
                                                pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
-                                               X_red_diam / 2., num_attempts=10)
+                                               X_red_diam / 2., num_attempts=10, save_rollouts_dir=save_rollouts_dir)
 
             if collided:
                 num_collided += 1

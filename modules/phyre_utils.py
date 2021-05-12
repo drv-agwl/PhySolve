@@ -1,9 +1,13 @@
+import os
+
 import phyre
 import numpy as np
 from DataCollection.data_collector import get_collision_timestep
+import os.path as osp
+import imageio
 
 
-def simulate_action(sim, task_idx, x, y, r, num_attempts=10):
+def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollouts_dir=None):
     x = x * 256. / 255.
     y = y * 256. / 255.
 
@@ -17,8 +21,11 @@ def simulate_action(sim, task_idx, x, y, r, num_attempts=10):
     delta_generator = action_delta_generator(pure_noise=True)
     action_memory = [action]
 
+    res_first_guess = None
+
     try:
         res = sim.simulate_action(task_idx, action, need_featurized_objects=True, stride=1)
+        res_first_guess = res
         if get_collision_timestep(res) != -1:
             collided = 1
         if res.status.is_solved():
@@ -27,31 +34,50 @@ def simulate_action(sim, task_idx, x, y, r, num_attempts=10):
     except:
         pass
 
-    while not solved or attempt < num_attempts:
+    while not solved and attempt < num_attempts:
         delta = delta_generator.__next__()
         new_action = np.clip(action + delta, 0., 1.)
 
-        if new_action in action_memory:
+        if similar_action_tried(new_action, action_memory):
             continue
 
         try:
-            res = sim.simulate_action(task_idx, new_action, need_featurized_objects=True, stride=1)
             attempt += 1
             action_memory.append(new_action)
+            res = sim.simulate_action(task_idx, new_action, need_featurized_objects=True, stride=1)
 
             if get_collision_timestep(res) != -1:
                 collided = 1
             if res.status.is_solved():
+                if save_rollouts_dir is not None:
+                    save_rollout_as_gif(res, get_collision_timestep(res), save_rollouts_dir, task_id)
                 solved = 1
-            return collided, solved
+                return collided, solved
         except:
-            return 0, 0
+            continue
+
+    if save_rollouts_dir is not None and res_first_guess is not None:
+        save_rollout_as_gif(res_first_guess, get_collision_timestep(res_first_guess), save_rollouts_dir, task_id)
+    return collided, solved
 
 
-def similar_action_tried(self, action, tries):
-    for other in tries:
-        if (np.linalg.norm(action - other) < 0.02):
-            print("similiar action already tried", action, other, end="\r")
+def save_rollout_as_gif(res, collision_timestep, save_dir, task_id):
+    template = str(int(task_id.split(":")))
+    os.makedirs(osp.join(save_dir, template), exist_ok=True)
+    start_sleep = 10
+
+    if collision_timestep != -1:
+        rollout = np.concatenate([res.images[collision_timestep][None]*start_sleep, res.images], axis=0)
+    else:
+        rollout = res.images
+
+    imageio.mimsave(osp.join(save_dir, template, task_id+".gif"), rollout, fps=25)
+
+
+def similar_action_tried(action, action_memory):
+    for other in action_memory:
+        if np.linalg.norm(action - other) < 0.02:
+            print("similar action already tried", action, other, end="\r")
             return True
     return False
 

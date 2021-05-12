@@ -30,4 +30,5 @@ if __name__ == '__main__':
     solver.simulate_combined(collision_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/24.pt",
                              position_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/PositionModel/32.pt",
                              data_paths=paths,
-                             batch_size=1)
+                             batch_size=1,
+                             save_rollout_dir="/home/dhruv/Desktop/PhySolve/results/saved_rollouts")
