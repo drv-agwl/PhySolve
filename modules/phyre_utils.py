@@ -62,16 +62,17 @@ def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollo
 
 
 def save_rollout_as_gif(res, collision_timestep, save_dir, task_id):
-    template = str(int(task_id.split(":")))
+    template = f"Task-{str(int(task_id.split(':')[0]))}"
     os.makedirs(osp.join(save_dir, template), exist_ok=True)
     start_sleep = 10
 
     if collision_timestep != -1:
-        rollout = np.concatenate([res.images[collision_timestep][None]*start_sleep, res.images], axis=0)
+        rollout = phyre.observations_to_float_rgb(np.concatenate([res.images[collision_timestep][None]] * 10 +
+                                                                 [res.images], axis=0))
     else:
-        rollout = res.images
+        rollout = phyre.observations_to_float_rgb(res.images)
 
-    imageio.mimsave(osp.join(save_dir, template, task_id+".gif"), rollout, fps=25)
+    imageio.mimsave(osp.join(save_dir, template, task_id + ".gif"), rollout, fps=25)
 
 
 def similar_action_tried(action, action_memory):
