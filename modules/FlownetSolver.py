@@ -485,8 +485,8 @@ class FlownetSolver:
 
     def simulate_combined(self, collision_ckpt, position_ckpt, data_paths, batch_size=32):
         if self.device == "cuda":
-            self.collision_model.cuda()
-            self.position_model.cuda()
+            self.collision_model.cuda().eval()
+            self.position_model.cuda().eval()
 
         size = (self.width, self.width)
 
@@ -565,7 +565,7 @@ class FlownetSolver:
             pred_y, pred_x = self.get_position_pred(red_ball_pred, X_red_diam.cpu().numpy())
             collided, solved = simulate_action(sim, id,
                                                pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
-                                               X_red_diam / 2.)
+                                               X_red_diam / 2., num_attempts=10)
 
             if collided:
                 num_collided += 1
@@ -591,7 +591,7 @@ class FlownetSolver:
             success.append(row)
 
         df = pd.DataFrame(success, columns=["Template", "Collision success", "Solved success"])
-        df.to_csv("./success_combined.csv", index=False)
+        df.to_csv("./success_gt.csv", index=False)
 
     def simulate_position_model(self, checkpoint, data_paths, batch_size=32):
         if self.device == "cuda":
