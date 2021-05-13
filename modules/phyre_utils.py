@@ -68,9 +68,9 @@ def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollo
         try:
             collision_scene = get_solving_collision_scene(sim, task_id, task_idx)
             if solved:
-                save_rollout_as_gif(res_first_guess, collision_scene, "solved", save_rollouts_dir, task_id)
+                save_rollout_as_gif(res_first_guess, collision_scene, save_rollouts_dir, "solved", task_id)
             else:
-                save_rollout_as_gif(res_first_guess, collision_scene, "unsolved", save_rollouts_dir, task_id)
+                save_rollout_as_gif(res_first_guess, collision_scene, save_rollouts_dir, "unsolved", task_id)
         except:
             pass
     return collided, solved
@@ -113,7 +113,7 @@ def get_solving_collision_scene(sim, task_id, task_idx):
     return np.zeros((256, 256, 3))
 
 
-def save_rollout_as_gif(res, collision_scene, status, save_dir, task_id):
+def save_rollout_as_gif(res, collision_scene, save_dir, status, task_id):
     template = f"Task-{str(int(task_id.split(':')[0]))}"
     os.makedirs(osp.join(save_dir, template, status), exist_ok=True)
     start_sleep = 50
