@@ -5,6 +5,11 @@ import numpy as np
 from DataCollection.data_collector import get_collision_timestep
 import os.path as osp
 import imageio
+import random
+from PIL import Image, ImageDraw, ImageFont
+
+cache = phyre.get_default_100k_cache('ball')
+cache_actions = cache.action_array
 
 
 def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollouts_dir=None):
@@ -52,7 +57,8 @@ def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollo
                 solved = 1
 
                 if save_rollouts_dir is not None:
-                    save_rollout_as_gif(res, get_collision_timestep(res), save_rollouts_dir, task_id)
+                    collision_scene = get_solving_collision_scene(sim, task_id, task_idx)
+                    save_rollout_as_gif(res, collision_scene, save_rollouts_dir, "solved", task_id)
 
                 return collided, solved
         except:
@@ -60,26 +66,68 @@ def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollo
 
     if save_rollouts_dir is not None and res_first_guess is not None:
         try:
-            save_rollout_as_gif(res_first_guess, get_collision_timestep(res_first_guess), save_rollouts_dir, task_id)
+            collision_scene = get_solving_collision_scene(sim, task_id, task_idx)
+            if solved:
+                save_rollout_as_gif(res_first_guess, collision_scene, "solved", save_rollouts_dir, task_id)
+            else:
+                save_rollout_as_gif(res_first_guess, collision_scene, "unsolved", save_rollouts_dir, task_id)
         except:
             pass
     return collided, solved
 
 
-def save_rollout_as_gif(res, collision_timestep, save_dir, task_id):
+def get_text_image(text, size=(256, 256, 3)):
+    img = Image.new('RGB', (256, 256), color=(255, 255, 255))
+    d = ImageDraw.Draw(img)
+    font = ImageFont.truetype('/home/dhruv/Desktop/PhySolve/arial.ttf', 25)
+    d.text((30, 110), text, font=font, fill=(255, 0, 0), align="center")
+    return np.array(img)
+
+
+def get_solving_collision_scene(sim, task_id, task_idx):
+    solved = 0
+    cache_list = cache_actions[cache.load_simulation_states(task_id) == 1]
+    res = None
+    while not solved:
+        actionlist = cache_list
+
+        if len(actionlist) == 0:
+            print("WARNING no solution action in cache at task", task_id)
+            actionlist = [np.random.rand(3)]
+
+        action = random.choice(actionlist)
+        res = sim.simulate_action(task_idx, action,
+                                  need_featurized_objects=True, stride=1)
+
+        if (res.status.is_solved() == 1) and not res.status.is_invalid():
+            solved = 1
+
+    if solved and res:
+        try:
+            collision_timestep = get_collision_timestep(res)
+            return res.images[collision_timestep]
+
+        except:
+            return np.zeros((256, 256, 3))
+
+    return np.zeros((256, 256, 3))
+
+
+def save_rollout_as_gif(res, collision_scene, status, save_dir, task_id):
     template = f"Task-{str(int(task_id.split(':')[0]))}"
-    os.makedirs(osp.join(save_dir, template), exist_ok=True)
+    os.makedirs(osp.join(save_dir, template, status), exist_ok=True)
     start_sleep = 50
 
-    if collision_timestep != -1:
-        rollout = np.repeat(res.images[collision_timestep][None], start_sleep, axis=0)
-        rollout = np.concatenate([rollout, res.images], axis=0)
-        rollout = np.concatenate([phyre.observations_to_uint8_rgb(x)[None] for x in rollout])
+    text_solving = np.repeat(get_text_image("Simulator Solution")[None], start_sleep, axis=0)
+    text_pred = np.repeat(get_text_image("Predicted Solution")[None], start_sleep, axis=0)
 
-    else:
-        rollout = np.concatenate([phyre.observations_to_uint8_rgb(x)[None] for x in res.images])
+    sim_soln = np.concatenate(
+        [phyre.observations_to_uint8_rgb(x)[None] for x in np.repeat(collision_scene[None], start_sleep,
+                                                                     axis=0)])
+    rollout = np.concatenate([phyre.observations_to_uint8_rgb(x)[None] for x in res.images])
+    rollout = np.concatenate([text_solving, sim_soln, text_pred, rollout], axis=0)
 
-    imageio.mimsave(osp.join(save_dir, template, task_id + ".gif"), rollout, fps=25)
+    imageio.mimsave(osp.join(save_dir, template, status, task_id + ".gif"), rollout, fps=25)
 
 
 def similar_action_tried(action, action_memory):

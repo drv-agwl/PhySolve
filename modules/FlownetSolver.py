@@ -592,7 +592,7 @@ class FlownetSolver:
             success.append(row)
 
         df = pd.DataFrame(success, columns=["Template", "Collision success", "Solved success"])
-        df.to_csv("./success_gt.csv", index=False)
+        df.to_csv("./success_combined.csv", index=False)
 
     def simulate_position_model(self, checkpoint, data_paths, batch_size=32):
         if self.device == "cuda":
