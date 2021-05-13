@@ -26,8 +26,8 @@ def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollo
     try:
         res = sim.simulate_action(task_idx, action, need_featurized_objects=True, stride=1)
         res_first_guess = res
-        if get_collision_timestep(res) != -1:
-            collided = 1
+        # if get_collision_timestep(res) != -1:
+        #     collided = 1
         if res.status.is_solved():
             solved = 1
 
@@ -46,18 +46,23 @@ def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollo
             action_memory.append(new_action)
             res = sim.simulate_action(task_idx, new_action, need_featurized_objects=True, stride=1)
 
-            if get_collision_timestep(res) != -1:
-                collided = 1
+            # if get_collision_timestep(res) != -1:
+            #     collided = 1
             if res.status.is_solved():
+                solved = 1
+
                 if save_rollouts_dir is not None:
                     save_rollout_as_gif(res, get_collision_timestep(res), save_rollouts_dir, task_id)
-                solved = 1
+
                 return collided, solved
         except:
             continue
 
     if save_rollouts_dir is not None and res_first_guess is not None:
-        save_rollout_as_gif(res_first_guess, get_collision_timestep(res_first_guess), save_rollouts_dir, task_id)
+        try:
+            save_rollout_as_gif(res_first_guess, get_collision_timestep(res_first_guess), save_rollouts_dir, task_id)
+        except:
+            pass
     return collided, solved
 
 
