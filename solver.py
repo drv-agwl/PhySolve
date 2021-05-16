@@ -13,11 +13,12 @@ def get_args_parser():
 
     parser.add_argument('--train_collision_model', default=False, type=bool)
     parser.add_argument('--train_position_model', default=False, type=bool)
-    parser.add_argument('--simulate_collision_model', default=True, type=bool)
-    parser.add_argument('--simulate_position_model', default=True, type=bool)
-    parser.add_argument('--simulate_model', default=True, type=bool)
+    parser.add_argument('--simulate_collision_model', default=False, type=bool)
+    parser.add_argument('--simulate_position_model', default=False, type=bool)
+    parser.add_argument('--simulate_model', default=False, type=bool)
     parser.add_argument('--smooth_loss', default=False, type=bool)
     parser.add_argument('--device', default='cuda')
+    parser.add_argument('--save_rollouts_dir', default=None, type=str)
 
     return parser
 
@@ -30,7 +31,7 @@ if __name__ == '__main__':
 
     paths = [osp.join(data_dir, i) for i in os.listdir(data_dir)]
 
-    solver = FlownetSolver(5, args.device)
+    solver = FlownetSolver(5, 64, args.device)
 
     if args.train_position_model:
         solver.train_position_model(data_paths=paths,
@@ -43,12 +44,12 @@ if __name__ == '__main__':
                                      smooth_loss=args.smooth_loss)
 
     if args.simulate_collision_model:
-        solver.simulate_collision_model(checkpoint='/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/60.pt',
+        solver.simulate_collision_model(checkpoint='/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/26.pt',
                                         data_paths=paths,
                                         batch_size=1)
 
     if args.simulate_model:
-        solver.simulate_combined(collision_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/24.pt",
+        solver.simulate_combined(collision_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/26.pt",
                                  position_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/PositionModel/32.pt",
                                  data_paths=paths,
                                  batch_size=1,

@@ -176,11 +176,12 @@ def rescale(x):
 
 
 class FlownetSolver:
-    def __init__(self, seq_len, device):
+    def __init__(self, seq_len, width, device):
         super().__init__()
         self.device = ("cuda" if T.cuda.is_available() else "cpu") if device == "cuda" else "cpu"
         print("device:", self.device)
         self.seq_len = seq_len
+        self.width = width
         self.logger = dict()
 
         self.collision_model = Pyramid(seq_len * 2 + seq_len // 2 + 2, 1)
@@ -284,14 +285,14 @@ class FlownetSolver:
             T.save(self.collision_model.state_dict(), f"./checkpoints/CollisionModel/{epoch + 1}.pt")
             for i, batch in enumerate(test_data_loader):
                 X_image = batch[0].float().to(self.device)
-                radius = batch[0].float().to(self.device) / 2.
+                radius = batch[1].float().to(self.device) / 2.
 
                 num_steps = self.seq_len // 2 + 1
                 model_input = X_image[:, :2 * self.seq_len + 1 + num_steps]
                 red_ball_gt = X_image[:, 2 * self.seq_len + 1 + num_steps:]
 
                 red_ball_preds = []
-                for timestep in range(1):
+                for timestep in range(num_steps):
                     red_ball_pred, pred_radius = self.collision_model(model_input)
                     red_ball_preds.append(red_ball_pred)
 
@@ -516,19 +517,19 @@ class FlownetSolver:
 
             # Collision model prediction
             X_image = batch_collision[0].float().to(self.device)
-            X_red_diam = batch_collision[1].float().to(self.device)
+            # X_red_diam = batch_collision[1].float().to(self.device)
 
             num_steps = self.seq_len // 2 + 1
             model_input = X_image[:, :2 * self.seq_len + 1 + num_steps]
 
             red_ball_preds = []
             for timestep in range(1):
-                red_ball_pred = self.collision_model(model_input)
+                red_ball_pred, radius = self.collision_model(model_input)
                 red_ball_preds.append(red_ball_pred)
 
-            pred_x, pred_y = self.get_position_pred(red_ball_preds[0], X_red_diam.cpu().numpy())
+            pred_x, pred_y = self.get_position_pred(red_ball_preds[0], radius.squeeze(1).cpu().numpy()*2)
             red_channel_collision = draw_ball(size, pred_y, pred_x,
-                                              X_red_diam.cpu().numpy() * size[0] / 2.)  # Output of collision model
+                                              radius.squeeze(-1).cpu().numpy() * size[0])  # Output of collision model
 
             # Position Model
             X_image = batch_position[0].float().to(self.device)
@@ -542,10 +543,10 @@ class FlownetSolver:
 
             red_ball_pred = self.position_model(model_input[0], model_input[1])
 
-            pred_y, pred_x = self.get_position_pred(red_ball_pred, X_red_diam.cpu().numpy())
+            pred_y, pred_x = self.get_position_pred(red_ball_pred, radius.squeeze(1).cpu().numpy()*2)
             collided, solved = simulate_action(sim, id, tasks[id],
                                                pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
-                                               X_red_diam / 2., num_attempts=10, save_rollouts_dir=save_rollouts_dir)
+                                               radius.squeeze(-1), num_attempts=10, save_rollouts_dir=save_rollouts_dir)
 
             if collided:
                 num_collided += 1
