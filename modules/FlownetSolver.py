@@ -233,7 +233,7 @@ class FlownetSolver:
                         red_ball_gt = torch.clamp(red_ball_gt, 0., 1.)
 
                     loss_ball = F.binary_cross_entropy(red_ball_pred[:, 0], red_ball_gt[:, timestep])
-                    loss_rad = F.mse_loss(radius, pred_radius)
+                    loss_rad = F.mse_loss(radius, pred_radius.squeeze(-1))
                     loss = loss_ball + loss_rad
                     losses.append(loss.item())
 
