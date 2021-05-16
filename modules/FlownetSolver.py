@@ -527,9 +527,10 @@ class FlownetSolver:
                 red_ball_pred, radius = self.collision_model(model_input)
                 red_ball_preds.append(red_ball_pred)
 
-            pred_x, pred_y = self.get_position_pred(red_ball_preds[0], radius.squeeze(1).cpu().numpy()*2)
+            pred_x, pred_y = self.get_position_pred(red_ball_preds[0], radius.squeeze(1).detach().cpu().numpy()*2)
             red_channel_collision = draw_ball(size, pred_y, pred_x,
-                                              radius.squeeze(-1).cpu().numpy() * size[0])  # Output of collision model
+                                              radius.squeeze(-1).detach().cpu().numpy() * size[0])  # Output of
+            # collision model
 
             # Position Model
             X_image = batch_position[0].float().to(self.device)
@@ -543,10 +544,11 @@ class FlownetSolver:
 
             red_ball_pred = self.position_model(model_input[0], model_input[1])
 
-            pred_y, pred_x = self.get_position_pred(red_ball_pred, radius.squeeze(1).cpu().numpy()*2)
+            pred_y, pred_x = self.get_position_pred(red_ball_pred, radius.squeeze(1).detach().cpu().numpy()*2)
             collided, solved = simulate_action(sim, id, tasks[id],
                                                pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
-                                               radius.squeeze(-1), num_attempts=10, save_rollouts_dir=save_rollouts_dir)
+                                               radius.squeeze(-1).detach(), num_attempts=10,
+                                               save_rollouts_dir=save_rollouts_dir)
 
             if collided:
                 num_collided += 1
