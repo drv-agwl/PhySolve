@@ -121,12 +121,7 @@ class Pyramid2(nn.Module):
         x = torch.cat([x, time], dim=1)
         x = self.encoder(x)
         x = self.flatten(x)
-        # x = self.dense_down(x)
 
-        # x = torch.cat((x, time[:, None]), dim=-1)
-        # x = self.dense(x)
-
-        # x = self.dense_up(x)
         b = x.size(0)
         x = x.view(b, 64, 1, 1)
         x = self.decoder(x)
@@ -135,60 +130,45 @@ class Pyramid2(nn.Module):
 
 
 class Pyramid(nn.Module):
-    def __init__(self, in_dim, chs, wid, hidfac):
+    def __init__(self, in_dim, chs):
         super().__init__()
-        """
-        self.model = nn.Sequential(
-            nn.Conv2d(in_dim, 8, 4, 2, 1),
-            nn.ReLU(),
-            nn.Conv2d(8, 16, 4, 2, 1),
-            nn.ReLU(),
-            nn.Conv2d(16, 32, 4, 2, 1),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, 4, 2, 1),
-            nn.ReLU(),
-            nn.Conv2d(64, 128, 4, 2, 1),
-            nn.ReLU(),
-            nn.ConvTranspose2d(128, 64, 4, 2, 1),
-            nn.ReLU(),
-            nn.ConvTranspose2d(64, 32, 4, 2, 1),
-            nn.ReLU(),
-            nn.ConvTranspose2d(32, 16, 4, 2, 1),
-            nn.ReLU(),
-            nn.ConvTranspose2d(16, 8, 4, 2, 1),
-            nn.ReLU(),
-            nn.ConvTranspose2d(8, chs, 4, 2, 1),
-            nn.Sigmoid()
-        )
-        """
+        self.encoder = nn.Sequential(nn.Conv2d(in_dim, 8, 4, 2, 1),
+                                     nn.ReLU(),
+                                     nn.Conv2d(8, 16, 4, 2, 1),
+                                     nn.ReLU(),
+                                     nn.Conv2d(16, 32, 4, 2, 1),
+                                     nn.ReLU(),
+                                     nn.Conv2d(32, 64, 4, 2, 1),
+                                     nn.ReLU(),
+                                     nn.Conv2d(64, 64, 4, 2, 1),
+                                     nn.ReLU(),
+                                     nn.Conv2d(64, 64, 4, 2, 1),
+                                     nn.ReLU())
 
-        folds = range(1, int(np.math.log2(wid)))
-        acti = nn.ReLU
-        convs = [nn.Conv2d(int(2 ** (2 + i) * hidfac), int(2 ** (3 + i) * hidfac), 4, 2, 1) for i in folds]
-        encoder = [nn.Conv2d(in_dim, int(8 * hidfac), 4, 2, 1), acti()] + [acti() if i % 2 else convs[i // 2] for i in
-                                                                           range(2 * len(folds))]
-        trans_convs = [nn.ConvTranspose2d(int(2 ** (3 + i) * hidfac), int(2 ** (2 + i) * hidfac), 4, 2, 1) for i in
-                       reversed(folds)]
-        decoder = [acti() if i % 2 else trans_convs[i // 2] for i in range(2 * len(folds))] + [
-            nn.ConvTranspose2d(int(8 * hidfac), chs, 4, 2, 1), nn.Sigmoid()]
-        modules = encoder + decoder
-        self.model = nn.Sequential(*modules)
-        # print(self.model.state_dict().keys())
-
-        """
-        convs = [(2**(2+i), 2**(3+i)) for i in folds]
-        trans_convs = [(2**(3+i), 2**(2+i)) for i in reversed(folds)]
-        print(convs)
-        print(trans_convs)
-        encoder = [(in_dim,8), 'acti'] + [f"acti" if i%2 else convs[i//2] for i in range(2*len(folds))]
-        print(encoder)
-        decoder = [f"acti" if i%2 else trans_convs[i//2] for i in range(2*len(folds))] + [(8,chs), 'Sigmoid']
-        print(decoder)
-        print(*(encoder+decoder), sep='\n')
-        """
+        self.decoder = nn.Sequential(nn.ConvTranspose2d(64, 64, 4, 2, 1),
+                                     nn.ReLU(),
+                                     nn.ConvTranspose2d(64, 64, 4, 2, 1),
+                                     nn.ReLU(),
+                                     nn.ConvTranspose2d(64, 32, 4, 2, 1),
+                                     nn.ReLU(),
+                                     nn.ConvTranspose2d(32, 16, 4, 2, 1),
+                                     nn.ReLU(),
+                                     nn.ConvTranspose2d(16, 8, 4, 2, 1),
+                                     nn.ReLU(),
+                                     nn.ConvTranspose2d(8, chs, 4, 2, 1),
+                                     nn.Sigmoid())
+        self.flatten = nn.Flatten()
+        self.radius_head = nn.Sequential(nn.Linear(64, 32),
+                                         nn.ReLU(),
+                                         nn.Linear(32, 1),
+                                         nn.ReLU())
 
     def forward(self, X):
-        return self.model(X)
+        x = self.encoder(x)
+        r = self.radius_head(self.flatten(x))
+        x = self.decoder(x)
+
+        return x, r
 
 
 def rescale(x):
@@ -196,21 +176,14 @@ def rescale(x):
 
 
 class FlownetSolver:
-    def __init__(self, seq_len, width, device, hidfac=1, viz=100):
+    def __init__(self, seq_len, device):
         super().__init__()
         self.device = ("cuda" if T.cuda.is_available() else "cpu") if device == "cuda" else "cpu"
         print("device:", self.device)
-        self.width = width
-        self.discr = None
-        self.r_fac = 1
-        # self.cache = phyre.get_default_100k_cache('ball')
-        self.cache = None
-        self.hidfac = hidfac
-        self.viz = viz
         self.seq_len = seq_len
         self.logger = dict()
 
-        self.collision_model = Pyramid(seq_len * 2 + seq_len // 2 + 2, 1, width, hidfac)
+        self.collision_model = Pyramid(seq_len * 2 + seq_len // 2 + 2, 1)
         self.position_model = Pyramid2(4, 1)
 
         print("succesfully initialized models")
@@ -244,6 +217,7 @@ class FlownetSolver:
             losses = []
             for i, batch in enumerate(train_data_loader):
                 X_image = batch[0].float().to(self.device)
+                radius = batch[1].float().to(self.device) / 2.
 
                 num_steps = self.seq_len // 2 + 1
                 model_input = X_image[:, :2 * self.seq_len + 1 + num_steps]
@@ -251,14 +225,16 @@ class FlownetSolver:
 
                 red_ball_preds = []
                 for timestep in range(1):
-                    red_ball_pred = self.collision_model(model_input)
+                    red_ball_pred, pred_radius = self.collision_model(model_input)
                     red_ball_preds.append(red_ball_pred)
 
                     if smooth_loss:
                         red_ball_gt += 0.005
                         red_ball_gt = torch.clamp(red_ball_gt, 0., 1.)
 
-                    loss = F.binary_cross_entropy(red_ball_pred[:, 0], red_ball_gt[:, timestep])
+                    loss_ball = F.binary_cross_entropy(red_ball_pred[:, 0], red_ball_gt[:, timestep])
+                    loss_rad = F.mse_loss(radius, pred_radius)
+                    loss = loss_ball + loss_rad
                     losses.append(loss.item())
 
                     opti.zero_grad()

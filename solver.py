@@ -2,6 +2,7 @@ from modules.FlownetSolver import FlownetSolver
 import os
 import os.path as osp
 import sys
+import argparse
 
 
 def get_args_parser():
@@ -16,6 +17,7 @@ def get_args_parser():
     parser.add_argument('--simulate_position_model', default=True, type=bool)
     parser.add_argument('--simulate_model', default=True, type=bool)
     parser.add_argument('--smooth_loss', default=False, type=bool)
+    parser.add_argument('--device', default='cuda')
 
     return parser
 
@@ -28,17 +30,17 @@ if __name__ == '__main__':
 
     paths = [osp.join(data_dir, i) for i in os.listdir(data_dir)]
 
-    solver = FlownetSolver(5, 64, "cuda")
+    solver = FlownetSolver(5, args.device)
 
     if args.train_position_model:
         solver.train_position_model(data_paths=paths,
                                     epochs=100,
-                                    smooth_loss=smooth_loss)
+                                    smooth_loss=args.smooth_loss)
 
     if args.train_collision_model:
         solver.train_collision_model(data_paths=paths,
                                      epochs=100,
-                                     smooth_loss=smooth_loss)
+                                     smooth_loss=args.smooth_loss)
 
     if args.simulate_collision_model:
         solver.simulate_collision_model(checkpoint='/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/60.pt',
