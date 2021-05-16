@@ -292,7 +292,7 @@ class FlownetSolver:
 
                 red_ball_preds = []
                 for timestep in range(1):
-                    red_ball_pred, pred_radius = self.collision_model(model_input, radius)
+                    red_ball_pred, pred_radius = self.collision_model(model_input)
                     red_ball_preds.append(red_ball_pred)
 
                     loss_ball = F.binary_cross_entropy(red_ball_pred[:, 0], red_ball_gt[:, timestep])
