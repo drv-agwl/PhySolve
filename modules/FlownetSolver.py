@@ -284,17 +284,20 @@ class FlownetSolver:
             T.save(self.collision_model.state_dict(), f"./checkpoints/CollisionModel/{epoch + 1}.pt")
             for i, batch in enumerate(test_data_loader):
                 X_image = batch[0].float().to(self.device)
+                radius = batch[0].float().to(self.device) / 2.
 
                 num_steps = self.seq_len // 2 + 1
                 model_input = X_image[:, :2 * self.seq_len + 1 + num_steps]
                 red_ball_gt = X_image[:, 2 * self.seq_len + 1 + num_steps:]
 
                 red_ball_preds = []
-                for timestep in range(num_steps):
-                    red_ball_pred = self.collision_model(model_input)
+                for timestep in range(1):
+                    red_ball_pred, pred_radius = self.collision_model(model_input, radius)
                     red_ball_preds.append(red_ball_pred)
 
-                    loss = F.binary_cross_entropy(red_ball_pred[:, 0], red_ball_gt[:, timestep])
+                    loss_ball = F.binary_cross_entropy(red_ball_pred[:, 0], red_ball_gt[:, timestep])
+                    loss_rad = F.mse_loss(radius, pred_radius.squeeze(-1))
+                    loss = loss_ball + loss_rad
                     losses.append(loss.item())
 
                     model_input[:, 2 * self.seq_len + 1 + timestep] = red_ball_gt[:, timestep]
