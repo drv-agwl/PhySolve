@@ -6,28 +6,6 @@ from DataCollection.utils import *
 import pickle
 import gzip
 
-eval_setup = 'ball_cross_template'
-fold_id = 0
-num_samples = 100
-sigma = 0.5
-size = (64, 64)
-
-train_tasks, dev_tasks, test_tasks = phyre.get_fold(eval_setup, fold_id)
-
-# for task in [x for x in train_tasks if x.startswith('00002') == True]:
-#     try:
-#         os.mkdir('./tmp_2/00002/'+task[6:])
-#     except:
-#         continue
-
-# body-list = [Black, Green, Goal, Red]
-
-tasks = train_tasks + dev_tasks + test_tasks
-
-no_grey_ids = [0, 1, 2, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16]
-task_ids = [str(i).zfill(5) for i in no_grey_ids]
-tasks_ids = sorted([x for x in tasks if x.startswith(tuple(task_ids))])
-
 
 def get_collision_timestep(res):
     # return timestep where collision occurred
@@ -65,10 +43,6 @@ def check_collision(res):
     return collision_red, collision_green
 
 
-sim = phyre.initialize_simulator(tasks_ids, 'ball')
-database = []
-
-
 def get_obj_channels(imgs, size):
     if len(imgs.shape) == 2:
         obj_channels = np.array([cv2.resize(((imgs == ch).astype(float)), size, cv2.INTER_MAX)
@@ -84,7 +58,34 @@ def get_obj_channels(imgs, size):
     return obj_channels
 
 
+def get_noised_action(action, step):
+    noise_factor = step*0.1
+    while True:
+        noise = np.random.randn(3) * np.array([0.2, 0.1, 0.2]) * noise_factor
+        if np.linalg.norm(noise) >= 0.05:
+            noised_action = np.clip(action + noise, 0., 1.)
+            return noised_action
+
+
 if __name__ == '__main__':
+
+    eval_setup = 'ball_cross_template'
+    fold_id = 0
+    num_samples = 100
+    sigma = 0.5
+    size = (64, 64)
+
+    train_tasks, dev_tasks, test_tasks = phyre.get_fold(eval_setup, fold_id)
+
+    tasks = train_tasks + dev_tasks + test_tasks
+
+    no_grey_ids = [0, 1, 2, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16]
+    task_ids = [str(i).zfill(5) for i in no_grey_ids]
+    tasks_ids = sorted([x for x in tasks if x.startswith(tuple(task_ids))])
+
+    sim = phyre.initialize_simulator(tasks_ids, 'ball')
+    database = []
+
     for task_idx, task in enumerate(tasks_ids):
         database = []
         solving = True  # collect solving or non-solving task
@@ -146,8 +147,30 @@ if __name__ == '__main__':
                     range(collision_timestep - 2 * stride, collision_timestep + 3 * stride, stride)]
                 imgs_unsolved = get_obj_channels(imgs_unsolved, size=(64, 64))
 
+                # LFM data
+                step = solved+1
+                noised_action = get_noised_action(action, step=step)
+                try:
+                    res_lfm = sim.simulate_action(task_idx, noised_action,
+                                                  need_featurized_objects=True, stride=1)
+                except:
+                    continue
+                while res_lfm.images is None:
+                    step -= 0.2
+                    noised_action = get_noised_action(action, step=step)
+                    try:
+                        res_lfm = sim.simulate_action(task_idx, noised_action,
+                                                      need_featurized_objects=True, stride=1)
+                    except:
+                        continue
+
+                imgs_lfm = res_lfm.images[
+                    range(collision_timestep - 2 * stride, collision_timestep + 3 * stride, stride)]
+                imgs_lfm = get_obj_channels(imgs_lfm, size=(64, 64))
+
                 database.append({'images_solved': np.array(imgs_solved),
                                  'images_unsolved': np.array(imgs_unsolved),
+                                 'images_lfm': np.asarray(imgs_lfm),
                                  'features': features,
                                  'collision_timestep': collision_timestep / stride,
                                  'scene-0': get_obj_channels(np.array(res.images[0]), size=(64, 64)),

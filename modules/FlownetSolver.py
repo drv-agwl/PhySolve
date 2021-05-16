@@ -423,6 +423,7 @@ class FlownetSolver:
 
     def get_position_pred(self, pred_channel, diam):
         diam = round(diam[0] * self.width)
+        diam = max(1, diam)
         kernel = Image.new('1', (diam, diam))
         draw = ImageDraw.Draw(kernel)
         draw.ellipse((0, 0, diam - 1, diam - 1), fill=1)
