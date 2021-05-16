@@ -164,7 +164,7 @@ class Pyramid(nn.Module):
                                          nn.ReLU())
 
     def forward(self, X):
-        x = self.encoder(x)
+        x = self.encoder(X)
         r = self.radius_head(self.flatten(x))
         x = self.decoder(x)
 
