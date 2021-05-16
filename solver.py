@@ -3,32 +3,51 @@ import os
 import os.path as osp
 import sys
 
+
+def get_args_parser():
+    parser = argparse.ArgumentParser('PhySolve', add_help=False)
+    parser.add_argument('--lr', default=1e-4, type=float)
+    parser.add_argument('--weight_decay', default=1e-4, type=float)
+    parser.add_argument('--lr_drop', default=200, type=int)
+
+    parser.add_argument('--train_collision_model', default=False, type=bool)
+    parser.add_argument('--train_position_model', default=False, type=bool)
+    parser.add_argument('--simulate_collision_model', default=True, type=bool)
+    parser.add_argument('--simulate_position_model', default=True, type=bool)
+    parser.add_argument('--simulate_model', default=True, type=bool)
+    parser.add_argument('--smooth_loss', default=False, type=bool)
+
+    return parser
+
+
 if __name__ == '__main__':
-    smooth_loss = sys.argv[sys.argv.index("--smooth_loss") + 1] if "--smooth_loss" in sys.argv else False
+    parser = argparse.ArgumentParser("FaceNet", parents=[get_args_parser()])
+    args = parser.parse_args()
 
     data_dir = "./DataCollection/Database"
 
     paths = [osp.join(data_dir, i) for i in os.listdir(data_dir)]
 
     solver = FlownetSolver(5, 64, "cuda")
-    # solver.train_position_model(data_paths=paths,
-    #                             epochs=100,
-    #                             smooth_loss=smooth_loss)
 
-    # solver.train_collision_model(data_paths=paths,
-    #                              epochs=100,
-    #                              smooth_loss=smooth_loss)
+    if args.train_position_model:
+        solver.train_position_model(data_paths=paths,
+                                    epochs=100,
+                                    smooth_loss=smooth_loss)
 
-    # solver.simulate_position_model(checkpoint='/home/dhruv/Desktop/PhySolve/checkpoints/PositionModel/60.pt',
-    #                                data_paths=paths,
-    #                                batch_size=1)
+    if args.train_collision_model:
+        solver.train_collision_model(data_paths=paths,
+                                     epochs=100,
+                                     smooth_loss=smooth_loss)
 
-    # solver.simulate_collision_model(checkpoint='/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/60.pt',
-    #                                 data_paths=paths,
-    #                                 batch_size=1)
+    if args.simulate_collision_model:
+        solver.simulate_collision_model(checkpoint='/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/60.pt',
+                                        data_paths=paths,
+                                        batch_size=1)
 
-    solver.simulate_combined(collision_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/24.pt",
-                             position_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/PositionModel/32.pt",
-                             data_paths=paths,
-                             batch_size=1,
-                             save_rollouts_dir="/home/dhruv/Desktop/PhySolve/results/saved_rollouts")
+    if args.simulate_model:
+        solver.simulate_combined(collision_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/24.pt",
+                                 position_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/PositionModel/32.pt",
+                                 data_paths=paths,
+                                 batch_size=1,
+                                 save_rollouts_dir="/home/dhruv/Desktop/PhySolve/results/saved_rollouts")
