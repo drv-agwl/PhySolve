@@ -6,6 +6,7 @@ from DataCollection.utils import *
 import pickle
 import gzip
 import os
+import os.path as osp
 
 
 def get_collision_timestep(res):
@@ -80,8 +81,8 @@ if __name__ == '__main__':
 
     tasks = train_tasks + dev_tasks + test_tasks
 
-    # no_grey_ids = [0, 1, 2, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16]
-    no_grey_ids = [16]
+    no_grey_ids = [0, 1, 2, 4, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16]
+    # no_grey_ids = [14]
     task_ids = [str(i).zfill(5) for i in no_grey_ids]
     tasks_ids = sorted([x for x in tasks if x.startswith(tuple(task_ids))])
 
@@ -89,7 +90,7 @@ if __name__ == '__main__':
     database = []
 
     for task_idx, task in enumerate(tasks_ids):
-        if os.exists(f'./Database/{task}.pkl'):
+        if osp.exists(f'./Database/{task}.pkl'):
             continue
         database = []
         solving = True  # collect solving or non-solving task
