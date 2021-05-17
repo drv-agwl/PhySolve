@@ -187,7 +187,7 @@ class FlownetSolver:
 
         self.collision_model = Pyramid(seq_len * 2 + seq_len // 2 + 2, 1)
         self.position_model = Pyramid2(4, 1)
-        self.lfm = LfM(4, 1)
+        self.lfm = LfM(7, 1)
 
         print("succesfully initialized models")
 
@@ -809,15 +809,13 @@ class FlownetSolver:
         if self.device == "cuda":
             self.lfm.cuda()
 
-        size = (self.width, self.width)
-
         train_loss_log = []
         val_loss_log = []
 
         opti = T.optim.Adam(self.position_model.parameters(recurse=True), lr=3e-4)
         scheduler = T.optim.lr_scheduler.ReduceLROnPlateau(opti, 'min', patience=5, verbose=True)
 
-        train_data, test_data = load_lfm_data(data_paths)
+        train_data, test_data = load_lfm_data(data_paths, self.seq_len)
 
         train_data_loader = T.utils.data.DataLoader(PosModelDataset(train_data),
                                                     batch_size, shuffle=True)

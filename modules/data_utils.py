@@ -66,7 +66,7 @@ def load_data_collision(data_paths, seq_len, size, all_samples=False, shuffle=Tr
     return train_data, test_data
 
 
-def load_data_position(data_paths, seq_len, size, all_samples=False, shuffle=True):
+def load_data_position(data_paths, seq_len, all_samples=False, shuffle=True):
     channels = range(1, 7)
 
     train_data = []
@@ -86,40 +86,12 @@ def load_data_position(data_paths, seq_len, size, all_samples=False, shuffle=Tru
 
             collision_idx = seq_len // 2
 
-            # obj_channels = np.array(
-            #     [np.array([cv2.resize((frame == ch).astype(float), size, cv2.INTER_MAX) for ch in channels]) for
-            #      frame in frames])
-            # obj_channels = np.flip(obj_channels, axis=2)
-
-            # scene_0 = np.array([cv2.resize(((scene_0 == ch).astype(float)), size, cv2.INTER_MAX)
-            #                           for ch in channels])
-            # scene_0 = np.flip(scene_0, axis=1)
-            #
-            # scene_33 = np.array([cv2.resize(((scene_33 == ch).astype(float)), size, cv2.INTER_MAX)
-            #                     for ch in channels])
-            # scene_33 = np.flip(scene_33, axis=1)
-            #
-            # scene_66 = np.array([cv2.resize(((scene_66 == ch).astype(float)), size, cv2.INTER_MAX)
-            #                     for ch in channels])
-            # scene_66 = np.flip(scene_66, axis=1)
-
-            # if data_path.split('.')[0][-1] == '2':  # Task-2:
             green_ball_idx = 1
             red_ball_idx = 0
             static_obj_idxs = [3, 5]
-            # elif data_path.split('.')[0][-1] == '0':  # Task-20
-            #     green_ball_idx = 1
-            #     red_ball_idx = 0
-            #     static_obj_idxs = [3, 5]
-            # elif data_path.split('.')[0][-1] == '5':  # Task-15
-            #     green_ball_idx = 1
-            #     red_ball_idx = 0
-            #     static_obj_idxs = [3, 5]
 
             green_ball_collision = obj_channels[collision_idx, green_ball_idx].astype(np.uint8)
             red_ball_collision = obj_channels[collision_idx, red_ball_idx].astype(np.uint8)
-            # red_ball_path = np.flip(obj_channels[:seq_len // 2 + 1, red_ball_idx], axis=0).astype(
-            #     np.uint8)
 
             red_ball_gt = scene_0[red_ball_idx].astype(np.uint8)
 
@@ -141,9 +113,6 @@ def load_data_position(data_paths, seq_len, size, all_samples=False, shuffle=Tru
             combined = np.concatenate([green_ball_collision[None], red_ball_collision[None], static_objs,
                                        scene_0, scene_33, scene_66, red_ball_gt[None]], axis=0).astype(np.uint8)
 
-            # combined = np.concatenate([red_ball_path, static_objs, red_ball_gt[None]],
-            #                           axis=0).astype(np.uint8)
-
             red_diam = features[0][-1][3]
             train_data.append({"Images": combined,
                                "Collision_time": collision_time,
@@ -161,7 +130,7 @@ def load_data_position(data_paths, seq_len, size, all_samples=False, shuffle=Tru
     return train_data, test_data
 
 
-def load_lfm_data(data_paths, all_samples=False, shuffle=True):
+def load_lfm_data(data_paths, seq_len, all_samples=False, shuffle=True):
     train_data = []
 
     for data_path in sorted(data_paths):
@@ -169,16 +138,21 @@ def load_lfm_data(data_paths, all_samples=False, shuffle=True):
             task_data = pickle.load(fp)
         for data in task_data:
             unsolved_path = data['path_unsolved']
+            imgs_solved = data['images_solved']
             lfm_path = data['path_lfm']
             collision_time = data["collision_timestep"]
             features = data['features']
             task_id = data["task-id"]
             scene_0 = data["scene-0"]
 
+            collision_idx = seq_len // 2
+
             green_ball_idx = 1
             red_ball_idx = 0
             static_obj_idxs = [3, 5]
 
+            green_ball_collision = imgs_solved[collision_idx, green_ball_idx].astype(np.uint8)
+            red_ball_collision = imgs_solved[collision_idx, red_ball_idx].astype(np.uint8)
             green_ball_unsolved_path = unsolved_path[green_ball_idx].astype(np.uint8)
             static_objs = np.max(unsolved_path[static_obj_idxs], axis=0).astype(np.uint8)
             wrong_red_start = data['lfm_scene-0'][red_ball_idx]
@@ -186,7 +160,9 @@ def load_lfm_data(data_paths, all_samples=False, shuffle=True):
 
             red_ball_gt = scene_0[red_ball_idx].astype(np.uint8)
 
-            combined = np.concatenate([green_ball_unsolved_path[None], green_ball_lfm_path[None], wrong_red_start[None],
+            combined = np.concatenate([green_ball_collision[None], red_ball_collision[None],
+                                       green_ball_unsolved_path[None], green_ball_lfm_path[None], wrong_red_start[None],
+                                       static_objs[None],
                                        red_ball_gt[None]], axis=0).astype(np.uint8)
 
             red_diam = features[0][-1][3]

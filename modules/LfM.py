@@ -1,4 +1,5 @@
 from torch import nn
+import torch
 
 
 class LfM(nn.Module):
@@ -16,6 +17,8 @@ class LfM(nn.Module):
                                      nn.ReLU(),
                                      nn.Conv2d(64, 64, 4, 2, 1),
                                      nn.ReLU())
+
+        self.flatten = nn.Flatten()
 
         self.decoder = nn.Sequential(nn.ConvTranspose2d(64, 64, 4, 2, 1),
                                      nn.ReLU(),
