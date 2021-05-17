@@ -811,7 +811,7 @@ class FlownetSolver:
         train_loss_log = []
         val_loss_log = []
 
-        opti = T.optim.Adam(self.position_model.parameters(recurse=True), lr=3e-4)
+        opti = T.optim.Adam(self.lfm.parameters(recurse=True), lr=3e-4)
         scheduler = T.optim.lr_scheduler.ReduceLROnPlateau(opti, 'min', patience=5, verbose=True)
 
         train_data, test_data = load_lfm_data(data_paths, self.seq_len)
@@ -824,7 +824,7 @@ class FlownetSolver:
         rows = []
         pic_no = 1
         for epoch in range(epochs):
-            print("Training")
+            print("Training", end='\r')
             losses = []
             for i, batch in enumerate(train_data_loader):
                 X_image = batch[0].float().to(self.device)
@@ -861,7 +861,7 @@ class FlownetSolver:
                 # Trial attempt
                 red_ball_wrong_start = X_image[-1, 4][:, :, None].cpu()
                 green_ball_unsolved_path = X_image[-1, 2][:, :, None].cpu()
-                green_ball_path_lfm = X_image[-1, 2][:, :, None].cpu()
+                green_ball_path_lfm = X_image[-1, 3][:, :, None].cpu()
                 trial_scene = np.concatenate([red_ball_wrong_start, green_ball_unsolved_path,
                                               green_ball_path_lfm, static_objs], axis=-1)
                 row.append(trial_scene)
@@ -879,7 +879,7 @@ class FlownetSolver:
                 rows.append(row)
 
                 if i % 5 == 0:
-                    print(f"Epoch-{epoch}, iteration-{i}: Loss = {loss.item()}")
+                    print(f"Epoch-{epoch}, iteration-{i}: Loss = {loss.item()}", end='\r')
 
                 if len(rows) == 5:
                     os.makedirs(f"./results/train/LfM/{epoch + 1}", exist_ok=True)
@@ -895,7 +895,7 @@ class FlownetSolver:
 
             losses = []
             rows = []
-            print("Validation")
+            print("Validation", end='\r')
             os.makedirs("./checkpoints/LfM", exist_ok=True)
             T.save(self.position_model.state_dict(), f"./checkpoints/LfM/{epoch + 1}.pt")
             for i, batch in enumerate(test_data_loader):
@@ -926,7 +926,7 @@ class FlownetSolver:
                 # Trial attempt
                 red_ball_wrong_start = X_image[-1, 4][:, :, None].cpu()
                 green_ball_unsolved_path = X_image[-1, 2][:, :, None].cpu()
-                green_ball_path_lfm = X_image[-1, 2][:, :, None].cpu()
+                green_ball_path_lfm = X_image[-1, 3][:, :, None].cpu()
                 trial_scene = np.concatenate([red_ball_wrong_start, green_ball_unsolved_path,
                                               green_ball_path_lfm, static_objs], axis=-1)
                 row.append(trial_scene)
@@ -944,7 +944,7 @@ class FlownetSolver:
                 rows.append(row)
 
                 if i % 5 == 0:
-                    print(f"Epoch-{epoch}, iteration-{i}: Loss = {loss.item()}")
+                    print(f"Epoch-{epoch}, iteration-{i}: Loss = {loss.item()}", end='\r')
 
                 if len(rows) == 5:
                     os.makedirs(f"./results/test/LfM/{epoch + 1}", exist_ok=True)

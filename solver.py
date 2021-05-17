@@ -25,7 +25,7 @@ def get_args_parser():
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser("FaceNet", parents=[get_args_parser()])
+    parser = argparse.ArgumentParser("PhySolve", parents=[get_args_parser()])
     args = parser.parse_args()
 
     data_dir = "./DataCollection/Database"
