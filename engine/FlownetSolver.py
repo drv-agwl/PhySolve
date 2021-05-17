@@ -8,13 +8,13 @@ import torch.nn.functional as F
 from utils.phyre_utils import vis_pred_path_task
 import os
 import cv2
-from modules.data_utils import load_data_position, load_data_collision, load_lfm_data
+from engine.data_utils import load_data_position, load_data_collision, load_lfm_data
 from PIL import Image, ImageDraw
-from modules.phyre_utils import simulate_action
+from engine.phyre_utils import simulate_action
 from tqdm import tqdm
-from modules.data_utils import draw_ball
+from engine.data_utils import draw_ball
 import pandas as pd
-from modules.LfM import LfM
+from engine.LfM import LfM
 
 
 class PosModelDataset(torch.utils.data.Dataset):

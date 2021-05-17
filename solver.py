@@ -1,4 +1,4 @@
-from modules.FlownetSolver import FlownetSolver
+from engine.FlownetSolver import FlownetSolver
 import os
 import os.path as osp
 import sys
