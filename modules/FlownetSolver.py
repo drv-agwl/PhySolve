@@ -530,7 +530,7 @@ class FlownetSolver:
                 red_ball_pred, radius = self.collision_model(model_input)
                 red_ball_preds.append(red_ball_pred)
 
-            pred_x, pred_y = self.get_position_pred(red_ball_preds[0], radius.squeeze(1).detach().cpu().numpy()*2)
+            pred_x, pred_y = self.get_position_pred(red_ball_preds[0], radius.squeeze(1).detach().cpu().numpy() * 2)
             red_channel_collision = draw_ball(size, pred_y, pred_x,
                                               radius.squeeze(-1).detach().cpu().numpy() * size[0])  # Output of
             # collision model
@@ -547,7 +547,7 @@ class FlownetSolver:
 
             red_ball_pred = self.position_model(model_input[0], model_input[1])
 
-            pred_y, pred_x = self.get_position_pred(red_ball_pred, radius.squeeze(1).detach().cpu().numpy()*2)
+            pred_y, pred_x = self.get_position_pred(red_ball_pred, radius.squeeze(1).detach().cpu().numpy() * 2)
             collided, solved = simulate_action(sim, id, tasks[id],
                                                pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
                                                radius.squeeze(-1).detach(), num_attempts=10,
@@ -684,7 +684,6 @@ class FlownetSolver:
             for i, batch in enumerate(train_data_loader):
                 X_image = batch[0].float().to(self.device)
                 X_time = batch[1].float().to(self.device) / 109.6
-                X_red_diam = batch[2].float().to(self.device)  # divide by max value of time
 
                 X_time = X_time[:, None, None].repeat(1, self.width, self.width)
 
@@ -830,7 +829,6 @@ class FlownetSolver:
             for i, batch in enumerate(train_data_loader):
                 X_image = batch[0].float().to(self.device)
                 X_time = batch[1].float().to(self.device) / 109.6  # divide by max value of time
-                X_red_diam = batch[2].float().to(self.device)
 
                 X_time = X_time[:, None, None].repeat(1, self.width, self.width)
 
@@ -853,19 +851,27 @@ class FlownetSolver:
                 # Visualisation
                 row = []
 
+                # Collision scene
                 green_ball_collision = X_image[-1, 0][:, :, None].cpu()
                 red_ball_collision = X_image[-1, 1][:, :, None].cpu()
-                static_objs = X_image[-1, 2][:, :, None].cpu()
-
+                static_objs = X_image[-1, -2][:, :, None].cpu()
                 collision_scene = np.concatenate([red_ball_collision, green_ball_collision, static_objs], axis=-1)
-
                 row.append(collision_scene)
 
-                empty_channel = np.zeros_like(static_objs)
+                # Trial attempt
+                red_ball_wrong_start = X_image[-1, 4][:, :, None].cpu()
+                green_ball_unsolved_path = X_image[-1, 2][:, :, None].cpu()
+                green_ball_path_lfm = X_image[-1, 2][:, :, None].cpu()
+                trial_scene = np.concatenate([red_ball_wrong_start, green_ball_unsolved_path,
+                                              green_ball_path_lfm, static_objs], axis=-1)
+                row.append(trial_scene)
 
+                # Ground truth
+                empty_channel = np.zeros_like(static_objs)
                 row.append(
                     np.concatenate([red_ball_gt.detach().cpu()[-1][:, :, None], empty_channel, empty_channel], axis=-1))
 
+                # Model prediction
                 row.append(
                     np.concatenate([red_ball_pred.detach().cpu()[-1][0][:, :, None], empty_channel, empty_channel],
                                    axis=-1))
@@ -876,8 +882,8 @@ class FlownetSolver:
                     print(f"Epoch-{epoch}, iteration-{i}: Loss = {loss.item()}")
 
                 if len(rows) == 5:
-                    os.makedirs(f"./results/train/PositionModel/{epoch + 1}", exist_ok=True)
-                    save_img_dir = f"./results/train/PositionModel/{epoch + 1}/"
+                    os.makedirs(f"./results/train/LfM/{epoch + 1}", exist_ok=True)
+                    save_img_dir = f"./results/train/LfM/{epoch + 1}/"
                     vis_pred_path_task(rows, save_img_dir, pic_no)
                     pic_no += 1
                     rows = []
@@ -910,19 +916,27 @@ class FlownetSolver:
                 # Visualisation
                 row = []
 
+                # Collision scene
                 green_ball_collision = X_image[-1, 0][:, :, None].cpu()
                 red_ball_collision = X_image[-1, 1][:, :, None].cpu()
-                static_objs = X_image[-1, 2][:, :, None].cpu()
-
+                static_objs = X_image[-1, -2][:, :, None].cpu()
                 collision_scene = np.concatenate([red_ball_collision, green_ball_collision, static_objs], axis=-1)
-
                 row.append(collision_scene)
 
-                empty_channel = np.zeros_like(static_objs)
+                # Trial attempt
+                red_ball_wrong_start = X_image[-1, 4][:, :, None].cpu()
+                green_ball_unsolved_path = X_image[-1, 2][:, :, None].cpu()
+                green_ball_path_lfm = X_image[-1, 2][:, :, None].cpu()
+                trial_scene = np.concatenate([red_ball_wrong_start, green_ball_unsolved_path,
+                                              green_ball_path_lfm, static_objs], axis=-1)
+                row.append(trial_scene)
 
+                # Ground truth
+                empty_channel = np.zeros_like(static_objs)
                 row.append(
                     np.concatenate([red_ball_gt.detach().cpu()[-1][:, :, None], empty_channel, empty_channel], axis=-1))
 
+                # Model prediction
                 row.append(
                     np.concatenate([red_ball_pred.detach().cpu()[-1][0][:, :, None], empty_channel, empty_channel],
                                    axis=-1))
