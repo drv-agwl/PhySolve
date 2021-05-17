@@ -175,6 +175,7 @@ if __name__ == '__main__':
                 database.append({'images_solved': np.array(imgs_solved),
                                  'images_unsolved': np.array(imgs_unsolved),
                                  'path_lfm': np.asarray(imgs_lfm),
+                                 'lfm_scene-0': get_obj_channels(np.array(res_lfm.images[0]), size=(64, 64)),
                                  'path_unsolved': np.array(imgs_unsolved_complete),
                                  'features': features,
                                  'collision_timestep': collision_timestep / stride,

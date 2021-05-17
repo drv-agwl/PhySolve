@@ -30,8 +30,13 @@ class LfM(nn.Module):
                                      nn.ConvTranspose2d(8, chs, 4, 2, 1),
                                      nn.Sigmoid())
 
-    def forward(self, x):
+    def forward(self, x, time):
+        x = torch.cat([x, time], dim=1)
         x = self.encoder(x)
+        x = self.flatten(x)
+
+        b = x.size(0)
+        x = x.view(b, 64, 1, 1)
         x = self.decoder(x)
 
         return x

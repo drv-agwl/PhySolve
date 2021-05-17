@@ -10,7 +10,7 @@ def draw_ball(size, y, x, r):
     background = np.zeros(size)
     img = Image.fromarray(background)
     draw = ImageDraw.Draw(img)
-    draw.ellipse([(x-r, y-r), (x+r, y+r)], fill=1.)
+    draw.ellipse([(x - r, y - r), (x + r, y + r)], fill=1.)
     return np.asarray(img)
 
 
@@ -143,6 +143,51 @@ def load_data_position(data_paths, seq_len, size, all_samples=False, shuffle=Tru
 
             # combined = np.concatenate([red_ball_path, static_objs, red_ball_gt[None]],
             #                           axis=0).astype(np.uint8)
+
+            red_diam = features[0][-1][3]
+            train_data.append({"Images": combined,
+                               "Collision_time": collision_time,
+                               "Red_diam": red_diam,
+                               "task-id": task_id})
+
+    if shuffle:
+        random.seed(7)
+        random.shuffle(train_data)
+
+    if all_samples:
+        return train_data
+
+    train_data, test_data = train_data[:int(0.9 * len(train_data))], train_data[int(0.9 * len(train_data)):]
+    return train_data, test_data
+
+
+def load_lfm_data(data_paths, all_samples=False, shuffle=True):
+    train_data = []
+
+    for data_path in sorted(data_paths):
+        with gzip.open(data_path, 'rb') as fp:
+            task_data = pickle.load(fp)
+        for data in task_data:
+            unsolved_path = data['path_unsolved']
+            lfm_path = data['path_lfm']
+            collision_time = data["collision_timestep"]
+            features = data['features']
+            task_id = data["task-id"]
+            scene_0 = data["scene-0"]
+
+            green_ball_idx = 1
+            red_ball_idx = 0
+            static_obj_idxs = [3, 5]
+
+            green_ball_unsolved_path = unsolved_path[green_ball_idx].astype(np.uint8)
+            static_objs = np.max(unsolved_path[static_obj_idxs], axis=0).astype(np.uint8)
+            wrong_red_start = data['lfm_scene-0'][red_ball_idx]
+            green_ball_lfm_path = lfm_path[green_ball_idx].astype(np.uint8)
+
+            red_ball_gt = scene_0[red_ball_idx].astype(np.uint8)
+
+            combined = np.concatenate([green_ball_unsolved_path[None], green_ball_lfm_path[None], wrong_red_start[None],
+                                       red_ball_gt[None]], axis=0).astype(np.uint8)
 
             red_diam = features[0][-1][3]
             train_data.append({"Images": combined,

@@ -8,12 +8,13 @@ import torch.nn.functional as F
 from utils.phyre_utils import vis_pred_path_task
 import os
 import cv2
-from modules.data_utils import load_data_position, load_data_collision
+from modules.data_utils import load_data_position, load_data_collision, load_lfm_data
 from PIL import Image, ImageDraw
 from modules.phyre_utils import simulate_action
 from tqdm import tqdm
 from modules.data_utils import draw_ball
 import pandas as pd
+from modules.LfM import LfM
 
 
 class PosModelDataset(torch.utils.data.Dataset):
@@ -186,6 +187,7 @@ class FlownetSolver:
 
         self.collision_model = Pyramid(seq_len * 2 + seq_len // 2 + 2, 1)
         self.position_model = Pyramid2(4, 1)
+        self.lfm = LfM(4, 1)
 
         print("succesfully initialized models")
 
@@ -800,5 +802,154 @@ class FlownetSolver:
 
         os.makedirs("./logs/PositionModel", exist_ok=True)
         with open(f"./logs/PositionModel/{epochs}.pkl", "wb") as f:
+            pickle.dump({"Train losses": train_loss_log,
+                         "Test losses": val_loss_log}, f)
+
+    def train_lfm(self, data_paths, epochs=100, batch_size=32, smooth_loss=False):
+        if self.device == "cuda":
+            self.lfm.cuda()
+
+        size = (self.width, self.width)
+
+        train_loss_log = []
+        val_loss_log = []
+
+        opti = T.optim.Adam(self.position_model.parameters(recurse=True), lr=3e-4)
+        scheduler = T.optim.lr_scheduler.ReduceLROnPlateau(opti, 'min', patience=5, verbose=True)
+
+        train_data, test_data = load_lfm_data(data_paths)
+
+        train_data_loader = T.utils.data.DataLoader(PosModelDataset(train_data),
+                                                    batch_size, shuffle=True)
+        test_data_loader = T.utils.data.DataLoader(PosModelDataset(test_data),
+                                                   batch_size, shuffle=True)
+
+        rows = []
+        pic_no = 1
+        for epoch in range(epochs):
+            print("Training")
+            losses = []
+            for i, batch in enumerate(train_data_loader):
+                X_image = batch[0].float().to(self.device)
+                X_time = batch[1].float().to(self.device) / 109.6  # divide by max value of time
+                X_red_diam = batch[2].float().to(self.device)
+
+                X_time = X_time[:, None, None].repeat(1, self.width, self.width)
+
+                model_input = X_image[:, :-1], X_time[:, None]
+                red_ball_gt = X_image[:, -1]
+
+                red_ball_pred = self.lfm(model_input[0], model_input[1])
+
+                if smooth_loss:
+                    red_ball_gt += 0.005
+                    red_ball_gt = torch.clamp(red_ball_gt, 0., 1.)
+
+                loss = F.binary_cross_entropy(red_ball_pred.squeeze(1), red_ball_gt)
+                losses.append(loss.item())
+
+                opti.zero_grad()
+                loss.backward()
+                opti.step()
+
+                # Visualisation
+                row = []
+
+                green_ball_collision = X_image[-1, 0][:, :, None].cpu()
+                red_ball_collision = X_image[-1, 1][:, :, None].cpu()
+                static_objs = X_image[-1, 2][:, :, None].cpu()
+
+                collision_scene = np.concatenate([red_ball_collision, green_ball_collision, static_objs], axis=-1)
+
+                row.append(collision_scene)
+
+                empty_channel = np.zeros_like(static_objs)
+
+                row.append(
+                    np.concatenate([red_ball_gt.detach().cpu()[-1][:, :, None], empty_channel, empty_channel], axis=-1))
+
+                row.append(
+                    np.concatenate([red_ball_pred.detach().cpu()[-1][0][:, :, None], empty_channel, empty_channel],
+                                   axis=-1))
+
+                rows.append(row)
+
+                if i % 5 == 0:
+                    print(f"Epoch-{epoch}, iteration-{i}: Loss = {loss.item()}")
+
+                if len(rows) == 5:
+                    os.makedirs(f"./results/train/PositionModel/{epoch + 1}", exist_ok=True)
+                    save_img_dir = f"./results/train/PositionModel/{epoch + 1}/"
+                    vis_pred_path_task(rows, save_img_dir, pic_no)
+                    pic_no += 1
+                    rows = []
+
+            pic_no = 1
+
+            train_loss = sum(losses) / len(losses)
+            train_loss_log.append(train_loss)
+
+            losses = []
+            rows = []
+            print("Validation")
+            os.makedirs("./checkpoints/LfM", exist_ok=True)
+            T.save(self.position_model.state_dict(), f"./checkpoints/LfM/{epoch + 1}.pt")
+            for i, batch in enumerate(test_data_loader):
+                X_image = batch[0].float().to(self.device)
+                X_time = batch[1].float().to(self.device) / 109.6  # divide by max value of time
+                X_red_diam = batch[2].float().to(self.device)
+
+                X_time = X_time[:, None, None].repeat(1, self.width, self.width)
+
+                model_input = X_image[:, :-1], X_time[:, None]
+                red_ball_gt = X_image[:, -1]
+
+                red_ball_pred = self.lfm(model_input[0], model_input[1])
+
+                loss = F.binary_cross_entropy(red_ball_pred.squeeze(1), red_ball_gt)
+                losses.append(loss.item())
+
+                # Visualisation
+                row = []
+
+                green_ball_collision = X_image[-1, 0][:, :, None].cpu()
+                red_ball_collision = X_image[-1, 1][:, :, None].cpu()
+                static_objs = X_image[-1, 2][:, :, None].cpu()
+
+                collision_scene = np.concatenate([red_ball_collision, green_ball_collision, static_objs], axis=-1)
+
+                row.append(collision_scene)
+
+                empty_channel = np.zeros_like(static_objs)
+
+                row.append(
+                    np.concatenate([red_ball_gt.detach().cpu()[-1][:, :, None], empty_channel, empty_channel], axis=-1))
+
+                row.append(
+                    np.concatenate([red_ball_pred.detach().cpu()[-1][0][:, :, None], empty_channel, empty_channel],
+                                   axis=-1))
+
+                rows.append(row)
+
+                if i % 5 == 0:
+                    print(f"Epoch-{epoch}, iteration-{i}: Loss = {loss.item()}")
+
+                if len(rows) == 5:
+                    os.makedirs(f"./results/test/LfM/{epoch + 1}", exist_ok=True)
+                    save_img_dir = f"./results/test/LfM/{epoch + 1}/"
+                    vis_pred_path_task(rows, save_img_dir, pic_no)
+                    pic_no += 1
+                    rows = []
+
+            val_loss = sum(losses) / len(losses)
+            val_loss_log.append(val_loss)
+            print(f"Epoch-{epoch + 1}, Training loss = {train_loss}, Validation loss = {val_loss}")
+
+            scheduler.step(val_loss)  # lr scheduler step
+
+            pic_no = 1
+
+        os.makedirs("./logs/LfM", exist_ok=True)
+        with open(f"./logs/LfM/{epochs}.pkl", "wb") as f:
             pickle.dump({"Train losses": train_loss_log,
                          "Test losses": val_loss_log}, f)

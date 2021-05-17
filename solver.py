@@ -13,6 +13,7 @@ def get_args_parser():
 
     parser.add_argument('--train_collision_model', default=False, type=bool)
     parser.add_argument('--train_position_model', default=False, type=bool)
+    parser.add_argument('--train_lfm', default=False, type=bool)
     parser.add_argument('--simulate_collision_model', default=False, type=bool)
     parser.add_argument('--simulate_position_model', default=False, type=bool)
     parser.add_argument('--simulate_model', default=False, type=bool)
@@ -42,6 +43,11 @@ if __name__ == '__main__':
         solver.train_collision_model(data_paths=paths,
                                      epochs=100,
                                      smooth_loss=args.smooth_loss)
+
+    if args.train_lfm:
+        solver.train_lfm(data_paths=paths,
+                         epochs=100,
+                         smooth_loss=args.smooth_loss)
 
     if args.simulate_collision_model:
         solver.simulate_collision_model(checkpoint='/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/26.pt',
