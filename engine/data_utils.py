@@ -14,7 +14,7 @@ def draw_ball(size, y, x, r):
     return np.asarray(img)
 
 
-def load_data_collision(data_paths, seq_len, size, all_samples=False, shuffle=True):
+def load_data_collision(data_paths, seq_len, all_samples=False, shuffle=True):
     channels = range(1, 7)
     train_data = []
     for data_path in sorted(data_paths):

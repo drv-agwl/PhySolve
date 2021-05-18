@@ -466,24 +466,29 @@ class FlownetSolver:
 
             pred_y, pred_x = self.get_position_pred(red_ball_preds[0], X_red_diam.cpu().numpy())
 
-    def simulate_combined(self, collision_ckpt, position_ckpt, data_paths, batch_size=32,
-                          save_rollouts_dir="/home/dhruv/Desktop/PhySolve/results/saved_rollouts"):
-        if self.device == "cuda":
-            self.collision_model.cuda().eval()
-            self.position_model.cuda().eval()
+    def simulate_combined(self, collision_ckpt, position_ckpt, lfm_ckpt, data_paths, batch_size=32,
+                          save_rollouts_dir="/home/dhruv/Desktop/PhySolve/results/saved_rollouts", device='cuda',
+                          num_lfm_attempts=10, num_random_attempts=0):
+        self.collision_model.to(device).eval()
+        self.position_model.to(device).eval()
+        self.lfm.to(device).eval()
 
         size = (self.width, self.width)
 
         self.collision_model.load_state_dict(T.load(collision_ckpt))
         self.position_model.load_state_dict(T.load(position_ckpt))
+        self.lfm.load_state_dict(T.load(lfm_ckpt))
 
-        data_collision = load_data_collision(data_paths, self.seq_len, size, all_samples=True, shuffle=False)
-        data_position = load_data_position(data_paths, self.seq_len, size, all_samples=True, shuffle=False)
+        data_collision = load_data_collision(data_paths, self.seq_len, all_samples=True, shuffle=False)
+        data_position = load_data_position(data_paths, self.seq_len, all_samples=True, shuffle=False)
+        data_lfm = load_lfm_data(data_paths, self.seq_len, all_samples=True, shuffle=False)
 
         collision_data_loader = T.utils.data.DataLoader(CollisionDataset(data_collision),
                                                         batch_size, shuffle=False)
         position_data_loader = T.utils.data.DataLoader(PosModelDataset(data_position),
                                                        batch_size, shuffle=False)
+        lfm_data_loader = T.utils.data.DataLoader(PosModelDataset(data_lfm), batch_size,
+                                                  shuffle=False)
 
         task_idxs, tasks = [], []
         id = 0
@@ -507,8 +512,9 @@ class FlownetSolver:
         doubt_ids = []
 
         id = 0
-        for batch_collision, batch_position in zip(collision_data_loader, position_data_loader):
-            assert batch_position[-1] == batch_collision[-1]
+        for batch_collision, batch_position, batch_lfm in zip(collision_data_loader, position_data_loader,
+                                                              lfm_data_loader):
+            assert batch_position[-1] == batch_collision[-1] == batch_lfm[-1]
             task_id = batch_position[3][0]
 
             template = task_id.split(":")[0]
@@ -538,7 +544,6 @@ class FlownetSolver:
             # Position Model
             X_image = batch_position[0].float().to(self.device)
             X_time = batch_position[1].float().to(self.device) / 109.6  # divide by max value of time
-
             X_time = X_time[:, None, None].repeat(1, self.width, self.width)
 
             model_input = X_image[:, :3], X_time[:, None]
@@ -548,10 +553,39 @@ class FlownetSolver:
             red_ball_pred = self.position_model(model_input[0], model_input[1])
 
             pred_y, pred_x = self.get_position_pred(red_ball_pred, radius.squeeze(1).detach().cpu().numpy() * 2)
-            collided, solved = simulate_action(sim, id, tasks[id],
+
+            collided, solved, lfm_paths = simulate_action(sim, id, tasks[id],
                                                pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
-                                               radius.squeeze(-1).detach(), num_attempts=10,
-                                               save_rollouts_dir=save_rollouts_dir)
+                                               radius.squeeze(-1).detach(), num_attempts=num_random_attempts,
+                                               save_rollouts_dir=save_rollouts_dir, return_lfm=True)
+
+            last_red_ball_pred = draw_ball(size, pred_y, pred_x, radius.squeeze(1).detach().cpu().numpy()*size[0])
+            last_green_ball_lfm_path = lfm_paths[1] # 1 is green ball idx
+
+            while not solved and num_lfm_attempts:
+                num_lfm_attempts -= 1
+
+                # LfM Model
+                X_image = batch_lfm[0].float().to(self.device)
+                X_time = batch_lfm[1].float().to(self.device) / 109.6  # divide by max value of time
+                X_time = X_time[:, None, None].repeat(1, self.width, self.width)
+
+                model_input = X_image[:, :-1], X_time[:, None]
+                model_input[0][:, 4] = torch.Tensor(last_red_ball_pred).to(device)  # last prediction of red ball as
+                # input
+                model_input[0][:, 3] = torch.Tensor(last_green_ball_lfm_path).to(device)
+
+                red_ball_pred = self.lfm(model_input[0], model_input[1])
+
+                pred_y, pred_x = self.get_position_pred(red_ball_pred, radius.squeeze(1).detach().cpu().numpy() * 2)
+
+                collided, solved = simulate_action(sim, id, tasks[id],
+                                                   pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
+                                                   radius.squeeze(-1).detach(), num_attempts=num_random_attempts,
+                                                   save_rollouts_dir=save_rollouts_dir)
+
+                last_red_ball_pred = draw_ball(size, pred_y, pred_x, radius.squeeze(1).detach().cpu().numpy())
+
 
             if collided:
                 num_collided += 1
@@ -897,7 +931,7 @@ class FlownetSolver:
             rows = []
             print("Validation", end='\r')
             os.makedirs("./checkpoints/LfM", exist_ok=True)
-            T.save(self.position_model.state_dict(), f"./checkpoints/LfM/{epoch + 1}.pt")
+            T.save(self.lfm.state_dict(), f"./checkpoints/LfM/{epoch + 1}.pt")
             for i, batch in enumerate(test_data_loader):
                 X_image = batch[0].float().to(self.device)
                 X_time = batch[1].float().to(self.device) / 109.6  # divide by max value of time

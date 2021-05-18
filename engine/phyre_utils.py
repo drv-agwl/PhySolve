@@ -2,7 +2,7 @@ import os
 
 import phyre
 import numpy as np
-from DataCollection.data_collector import get_collision_timestep
+from DataCollection.data_collector import get_collision_timestep, get_obj_channels
 import os.path as osp
 import imageio
 import random
@@ -31,6 +31,8 @@ def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollo
     try:
         res = sim.simulate_action(task_idx, action, need_featurized_objects=True, stride=1)
         res_first_guess = res
+        imgs_lfm = np.max(get_obj_channels(res.images, size=(64, 64)), axis=0)
+
         # if get_collision_timestep(res) != -1:
         #     collided = 1
         if res.status.is_solved():
@@ -50,6 +52,7 @@ def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollo
             attempt += 1
             action_memory.append(new_action)
             res = sim.simulate_action(task_idx, new_action, need_featurized_objects=True, stride=1)
+            imgs_lfm = np.max(get_obj_channels(res.images, size=(64, 64)), axis=0)
 
             # if get_collision_timestep(res) != -1:
             #     collided = 1
@@ -60,7 +63,7 @@ def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollo
                     collision_scene = get_solving_collision_scene(sim, task_id, task_idx)
                     save_rollout_as_gif(res, collision_scene, save_rollouts_dir, "solved", task_id)
 
-                return collided, solved
+                return collided, solved, imgs_lfm
         except:
             continue
 
@@ -73,7 +76,7 @@ def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollo
                 save_rollout_as_gif(res_first_guess, collision_scene, save_rollouts_dir, "unsolved", task_id)
         except:
             pass
-    return collided, solved
+    return collided, solved, imgs_lfm
 
 
 def get_text_image(text, size=(256, 256, 3)):
