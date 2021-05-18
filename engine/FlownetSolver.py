@@ -557,7 +557,7 @@ class FlownetSolver:
             collided, solved, lfm_paths = simulate_action(sim, id, tasks[id],
                                                pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
                                                radius.squeeze(-1).detach(), num_attempts=num_random_attempts,
-                                               save_rollouts_dir=save_rollouts_dir, return_lfm=True)
+                                               save_rollouts_dir=save_rollouts_dir)
 
             last_red_ball_pred = draw_ball(size, pred_y, pred_x, radius.squeeze(1).detach().cpu().numpy()*size[0])
             last_green_ball_lfm_path = lfm_paths[1] # 1 is green ball idx

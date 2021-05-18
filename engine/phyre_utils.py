@@ -12,7 +12,7 @@ cache = phyre.get_default_100k_cache('ball')
 cache_actions = cache.action_array
 
 
-def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollouts_dir=None):
+def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollouts_dir=None, size=(64, 64)):
     x = x * 256. / 255.
     y = y * 256. / 255.
 
@@ -27,11 +27,12 @@ def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollo
     action_memory = [action]
 
     res_first_guess = None
+    imgs_lfm = np.zeros(size)
 
     try:
         res = sim.simulate_action(task_idx, action, need_featurized_objects=True, stride=1)
         res_first_guess = res
-        imgs_lfm = np.max(get_obj_channels(res.images, size=(64, 64)), axis=0)
+        imgs_lfm = np.max(get_obj_channels(res.images, size=size), axis=0)
 
         # if get_collision_timestep(res) != -1:
         #     collided = 1
