@@ -54,10 +54,15 @@ if __name__ == '__main__':
                                         data_paths=paths,
                                         batch_size=1)
 
+    if args.simulate_position_model:
+        solver.simulate_position_model(checkpoint="/home/dhruv/Desktop/PhySolve/checkpoints/PositionModel/32.pt",
+                                       data_paths=paths,
+                                       batch_size=1)
+
     if args.simulate_model:
         solver.simulate_combined(collision_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/26.pt",
                                  position_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/PositionModel/32.pt",
-                                 lfm_ckpt='/home/dhruv/Desktop/PhySolve/checkpoints/LfM/1.pt',
+                                 lfm_ckpt='/home/dhruv/Desktop/PhySolve/checkpoints/LfM/35.pt',
                                  data_paths=paths,
                                  batch_size=1,
                                  save_rollouts_dir=args.save_rollouts_dir,

@@ -117,6 +117,10 @@ def load_data_position(data_paths, seq_len, all_samples=False, shuffle=True):
             train_data.append({"Images": combined,
                                "Collision_time": collision_time,
                                "Red_diam": red_diam,
+                               # "red_ball_pos": [features[int(collision_time)][red_ball_idx][0],
+                               #                  features[int(collision_time)][red_ball_idx][1]],
+                               # "green_ball_pos": [features[int(collision_time)][green_ball_idx][0],
+                               #                    features[int(collision_time)][green_ball_idx][1]],
                                "task-id": task_id})
 
     if shuffle:

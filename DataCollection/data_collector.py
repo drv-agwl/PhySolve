@@ -46,6 +46,7 @@ def check_collision(res):
 
 
 def get_obj_channels(imgs, size):
+    channels = range(1, 7)
     if len(imgs.shape) == 2:
         obj_channels = np.array([cv2.resize(((imgs == ch).astype(float)), size, cv2.INTER_MAX)
                                  for ch in channels])
@@ -61,12 +62,16 @@ def get_obj_channels(imgs, size):
 
 
 def get_noised_action(action, step):
-    noise_factor = step*0.1
+    noise_factor = step * 0.1
     while True:
         noise = np.random.randn(3) * np.array([0.2, 0.1, 0.2]) * noise_factor
-        if np.linalg.norm(noise) >= 0.05:
+        if np.linalg.norm(noise) >= 0.05 or sum(noise) == 0.:
             noised_action = np.clip(action + noise, 0., 1.)
+            # keep radius same
+            noised_action[-1] = action[-1]
             return noised_action
+        elif np.linalg.norm(noise) < 0.05:
+            noise_factor += 0.1
 
 
 if __name__ == '__main__':
@@ -153,38 +158,94 @@ if __name__ == '__main__':
                 imgs_unsolved = get_obj_channels(imgs_unsolved, size=(64, 64))
 
                 # LFM data
-                step = solved+1
-                noised_action = get_noised_action(action, step=step)
-                try:
-                    res_lfm = sim.simulate_action(task_idx, noised_action,
-                                                  need_featurized_objects=True, stride=1)
-                except:
-                    continue
-                while res_lfm.images is None:
-                    step -= 0.2
+                lfm_solving = 1
+                lfm_unsolving = 2
+
+                step = 1
+                while lfm_solving:  # get noisy action with solved results
                     noised_action = get_noised_action(action, step=step)
                     try:
                         res_lfm = sim.simulate_action(task_idx, noised_action,
                                                       need_featurized_objects=True, stride=1)
                     except:
                         continue
+                    while res_lfm.images is None:
+                        step -= 0.2
+                        step = max(0, step)
 
-                imgs_lfm = np.max(get_obj_channels(res_lfm.images, size=(64, 64)), axis=0)
-                imgs_unsolved_complete = np.max(get_obj_channels(res.images, size=(64, 64)), axis=0)
+                        noised_action = get_noised_action(action, step=step)
+                        try:
+                            res_lfm = sim.simulate_action(task_idx, noised_action,
+                                                          need_featurized_objects=True, stride=1)
+                        except:
+                            continue
 
-                database.append({'images_solved': np.array(imgs_solved),
-                                 'images_unsolved': np.array(imgs_unsolved),
-                                 'path_lfm': np.asarray(imgs_lfm),
-                                 'lfm_scene-0': get_obj_channels(np.array(res_lfm.images[0]), size=(64, 64)),
-                                 'path_unsolved': np.array(imgs_unsolved_complete),
-                                 'features': features,
-                                 'collision_timestep': collision_timestep / stride,
-                                 'scene-0': get_obj_channels(np.array(res.images[0]), size=(64, 64)),
-                                 'scene-33': get_obj_channels(np.array(res.images[collision_timestep * 1 // 3]),
-                                                              size=(64, 64)),
-                                 'scene-66': get_obj_channels(np.array(res.images[collision_timestep * 2 // 3]),
-                                                              size=(64, 64)),
-                                 'task-id': task})
+                    if res_lfm.status.is_solved():
+                        lfm_solving -= 1
+                        step += 0.5
+
+                        imgs_lfm = np.max(get_obj_channels(res_lfm.images, size=(64, 64)), axis=0)
+                        imgs_unsolved_complete = np.max(get_obj_channels(res_unsolved.images, size=(64, 64)), axis=0)
+
+                        database.append({'images_solved': np.array(imgs_solved),
+                                         'images_unsolved': np.array(imgs_unsolved),
+                                         'path_lfm': np.asarray(imgs_lfm),
+                                         'lfm_scene-0': get_obj_channels(np.array(res_lfm.images[0]), size=(64, 64)),
+                                         'path_unsolved': np.array(imgs_unsolved_complete),
+                                         'features': features,
+                                         'collision_timestep': collision_timestep / stride,
+                                         'scene-0': get_obj_channels(np.array(res.images[0]), size=(64, 64)),
+                                         'scene-33': get_obj_channels(np.array(res.images[collision_timestep * 1 // 3]),
+                                                                      size=(64, 64)),
+                                         'scene-66': get_obj_channels(np.array(res.images[collision_timestep * 2 // 3]),
+                                                                      size=(64, 64)),
+                                         'task-id': task})
+
+                step = 1
+                while lfm_unsolving:  # get noisy action with unsolved results
+                    noised_action = get_noised_action(action, step=step)
+                    if (noised_action == action).all():
+                        step = random.randint(1, 10)
+                        continue
+                    try:
+                        res_lfm = sim.simulate_action(task_idx, noised_action,
+                                                      need_featurized_objects=True, stride=1)
+                    except:
+                        continue
+                    while res_lfm.images is None:
+                        step -= 0.2
+                        step = max(0, step)
+
+                        noised_action = get_noised_action(action, step=step)
+                        try:
+                            res_lfm = sim.simulate_action(task_idx, noised_action,
+                                                          need_featurized_objects=True, stride=1)
+                        except:
+                            continue
+
+                    if not res_lfm.status.is_solved():
+                        lfm_unsolving -= 1
+                        step += 1
+
+                        imgs_lfm = np.max(get_obj_channels(res_lfm.images, size=(64, 64)), axis=0)
+                        imgs_unsolved_complete = np.max(get_obj_channels(res_unsolved.images, size=(64, 64)), axis=0)
+
+                        database.append({'images_solved': np.array(imgs_solved),
+                                         'images_unsolved': np.array(imgs_unsolved),
+                                         'path_lfm': np.asarray(imgs_lfm),
+                                         'lfm_scene-0': get_obj_channels(np.array(res_lfm.images[0]), size=(64, 64)),
+                                         'path_unsolved': np.array(imgs_unsolved_complete),
+                                         'features': features,
+                                         'collision_timestep': collision_timestep / stride,
+                                         'scene-0': get_obj_channels(np.array(res.images[0]), size=(64, 64)),
+                                         'scene-33': get_obj_channels(np.array(res.images[collision_timestep * 1 // 3]),
+                                                                      size=(64, 64)),
+                                         'scene-66': get_obj_channels(np.array(res.images[collision_timestep * 2 // 3]),
+                                                                      size=(64, 64)),
+                                         'task-id': task})
+
+                    elif res.status.is_solved():
+                        step = random.randint(1, 10)
 
         file = gzip.GzipFile(f'./Database/{task}.pkl', 'wb')
         pickle.dump(database, file)

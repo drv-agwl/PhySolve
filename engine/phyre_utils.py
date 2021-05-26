@@ -12,7 +12,8 @@ cache = phyre.get_default_100k_cache('ball')
 cache_actions = cache.action_array
 
 
-def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollouts_dir=None, size=(64, 64)):
+def simulate_action(sim, task_idx, task_id, x, y, r,
+                    num_attempts=10, save_rollouts_dir=None, size=(64, 64)):
     x = x * 256. / 255.
     y = y * 256. / 255.
 
@@ -27,15 +28,18 @@ def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollo
     action_memory = [action]
 
     res_first_guess = None
-    imgs_lfm = np.zeros(size)
+    imgs_lfm = None
 
     try:
         res = sim.simulate_action(task_idx, action, need_featurized_objects=True, stride=1)
         res_first_guess = res
         imgs_lfm = np.max(get_obj_channels(res.images, size=size), axis=0)
 
-        # if get_collision_timestep(res) != -1:
-        #     collided = 1
+        # collision_idx = get_collision_timestep(res)
+        # if collision_idx != -1:
+        # collided = 1
+        # X_red_pred_pos = res.featurized_objects.features[collision_idx][]
+        # pass
         if res.status.is_solved():
             solved = 1
 
@@ -65,6 +69,10 @@ def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollo
                     save_rollout_as_gif(res, collision_scene, save_rollouts_dir, "solved", task_id)
 
                 return collided, solved, imgs_lfm
+            else:
+                if save_rollouts_dir is not None:
+                    collision_scene = get_solving_collision_scene(sim, task_id, task_idx)
+                    save_rollout_as_gif(res, collision_scene, save_rollouts_dir, "unsolved", task_id)
         except:
             continue
 
@@ -83,8 +91,8 @@ def simulate_action(sim, task_idx, task_id, x, y, r, num_attempts=10, save_rollo
 def get_text_image(text, size=(256, 256, 3)):
     img = Image.new('RGB', (256, 256), color=(255, 255, 255))
     d = ImageDraw.Draw(img)
-    font = ImageFont.truetype('/home/dhruv/Desktop/PhySolve/arial.ttf', 25)
-    d.text((30, 110), text, font=font, fill=(255, 0, 0), align="center")
+    font = ImageFont.truetype('/home/dhruv/Desktop/PhySolve/arial.ttf', 15)
+    d.text((15, 110), text, font=font, fill=(255, 0, 0), align="center")
     return np.array(img)
 
 
@@ -120,16 +128,29 @@ def get_solving_collision_scene(sim, task_id, task_idx):
 def save_rollout_as_gif(res, collision_scene, save_dir, status, task_id):
     template = f"Task-{str(int(task_id.split(':')[0]))}"
     os.makedirs(osp.join(save_dir, template, status), exist_ok=True)
-    start_sleep = 50
+    start_sleep = 100
 
-    text_solving = np.repeat(get_text_image("Simulator Solution")[None], start_sleep, axis=0)
-    text_pred = np.repeat(get_text_image("Predicted Solution")[None], start_sleep, axis=0)
+    text_solving_collision = np.repeat(get_text_image("Simulator Collision scene")[None], start_sleep // 2, axis=0)
+    text_predicted_collision = np.repeat(get_text_image("Predicted Collision scene")[None], start_sleep // 2, axis=0)
+    text_pred = np.repeat(get_text_image("Predicted Solution")[None], start_sleep // 2, axis=0)
 
-    sim_soln = np.concatenate(
+    pred_collision_scene_idx = get_collision_timestep(res)
+    pred_collision_scene = np.zeros((64, 64, 3))
+
+    if pred_collision_scene_idx != -1:
+        pred_collision_scene = res.images[pred_collision_scene_idx]
+
+    sim_collision_scene = np.concatenate(
         [phyre.observations_to_uint8_rgb(x)[None] for x in np.repeat(collision_scene[None], start_sleep,
                                                                      axis=0)])
-    rollout = np.concatenate([phyre.observations_to_uint8_rgb(x)[None] for x in res.images])
-    rollout = np.concatenate([text_solving, sim_soln, text_pred, rollout], axis=0)
+    pred_collision_scene = np.concatenate(
+        [phyre.observations_to_uint8_rgb(x)[None] for x in np.repeat(pred_collision_scene[None],
+                                                                     start_sleep, axis=0)])
+    rollout = np.concatenate([phyre.observations_to_uint8_rgb(res.images[i])[None] for i in range(0, len(res.images), 10)])
+
+    rollout = np.concatenate([text_solving_collision, sim_collision_scene,
+                              text_predicted_collision, pred_collision_scene,
+                              text_pred, rollout], axis=0)
 
     imageio.mimsave(osp.join(save_dir, template, status, task_id + ".gif"), rollout, fps=25)
 

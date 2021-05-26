@@ -468,7 +468,7 @@ class FlownetSolver:
 
     def simulate_combined(self, collision_ckpt, position_ckpt, lfm_ckpt, data_paths, batch_size=32,
                           save_rollouts_dir="/home/dhruv/Desktop/PhySolve/results/saved_rollouts", device='cuda',
-                          num_lfm_attempts=10, num_random_attempts=0):
+                          num_lfm_attempts=0, num_random_attempts=10):
         self.collision_model.to(device).eval()
         self.position_model.to(device).eval()
         self.lfm.to(device).eval()
@@ -555,12 +555,11 @@ class FlownetSolver:
             pred_y, pred_x = self.get_position_pred(red_ball_pred, radius.squeeze(1).detach().cpu().numpy() * 2)
 
             collided, solved, lfm_paths = simulate_action(sim, id, tasks[id],
-                                               pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
-                                               radius.squeeze(-1).detach(), num_attempts=num_random_attempts,
-                                               save_rollouts_dir=save_rollouts_dir)
+                                                          pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
+                                                          radius.squeeze(-1).detach(), num_attempts=num_random_attempts,
+                                                          save_rollouts_dir=save_rollouts_dir)
 
-            last_red_ball_pred = draw_ball(size, pred_y, pred_x, radius.squeeze(1).detach().cpu().numpy()*size[0])
-            last_green_ball_lfm_path = lfm_paths[1] # 1 is green ball idx
+            last_red_ball_pred = draw_ball(size, pred_y, pred_x, radius.squeeze(1).detach().cpu().numpy() * size[0])
 
             while not solved and num_lfm_attempts:
                 num_lfm_attempts -= 1
@@ -573,19 +572,23 @@ class FlownetSolver:
                 model_input = X_image[:, :-1], X_time[:, None]
                 model_input[0][:, 4] = torch.Tensor(last_red_ball_pred).to(device)  # last prediction of red ball as
                 # input
-                model_input[0][:, 3] = torch.Tensor(last_green_ball_lfm_path).to(device)
+                if lfm_paths is not None:
+                    model_input[0][:, 3] = torch.Tensor(lfm_paths[1]).to(device)  # 1 is green ball idx
+                else:
+                    model_input[0][:, 3] = model_input[0][:, 2]
 
                 red_ball_pred = self.lfm(model_input[0], model_input[1])
 
                 pred_y, pred_x = self.get_position_pred(red_ball_pred, radius.squeeze(1).detach().cpu().numpy() * 2)
 
-                collided, solved = simulate_action(sim, id, tasks[id],
-                                                   pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
-                                                   radius.squeeze(-1).detach(), num_attempts=num_random_attempts,
-                                                   save_rollouts_dir=save_rollouts_dir)
+                collided, solved, lfm_paths = simulate_action(sim, id, tasks[id],
+                                                              pred_y / (self.width - 1.),
+                                                              1. - pred_x / (self.width - 1.),
+                                                              radius.squeeze(-1).detach(),
+                                                              num_attempts=num_random_attempts,
+                                                              save_rollouts_dir=save_rollouts_dir)
 
-                last_red_ball_pred = draw_ball(size, pred_y, pred_x, radius.squeeze(1).detach().cpu().numpy())
-
+                last_red_ball_pred = draw_ball(size, pred_y, pred_x, radius.squeeze(1).detach().cpu().numpy() * size[0])
 
             if collided:
                 num_collided += 1
@@ -621,7 +624,7 @@ class FlownetSolver:
 
         self.position_model.load_state_dict(T.load(checkpoint))
 
-        data = load_data_position(data_paths, self.seq_len, size, all_samples=True)
+        data = load_data_position(data_paths, self.seq_len, all_samples=True)
 
         data_loader = T.utils.data.DataLoader(PosModelDataset(data),
                                               batch_size, shuffle=False)
@@ -658,6 +661,8 @@ class FlownetSolver:
             X_image = batch[0].float().to(self.device)
             X_time = batch[1].float().to(self.device) / 109.6
             X_red_diam = batch[2].float().to(self.device)  # divide by max value of time
+            X_red_pos = batch[3].float().to(self.device)
+            X_green_pos = batch[4].float().to(self.device)
 
             X_time = X_time[:, None, None].repeat(1, self.width, self.width)
 
@@ -669,7 +674,8 @@ class FlownetSolver:
 
             solved = simulate_action(sim, id,
                                      pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
-                                     X_red_diam / 2.)
+                                     X_red_diam / 2.,
+                                     save_rollouts=True)
 
             if solved:
                 num_solved += 1
