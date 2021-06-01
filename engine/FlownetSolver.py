@@ -468,7 +468,7 @@ class FlownetSolver:
 
     def simulate_combined(self, collision_ckpt, position_ckpt, lfm_ckpt, data_paths, batch_size=32,
                           save_rollouts_dir="/home/dhruv/Desktop/PhySolve/results/saved_rollouts", device='cuda',
-                          num_lfm_attempts=0, num_random_attempts=10):
+                          num_lfm_attempts=10, num_random_attempts=0):
         self.collision_model.to(device).eval()
         self.position_model.to(device).eval()
         self.lfm.to(device).eval()
@@ -512,8 +512,11 @@ class FlownetSolver:
         doubt_ids = []
 
         id = 0
+        lfm_works = 0
         for batch_collision, batch_position, batch_lfm in zip(collision_data_loader, position_data_loader,
                                                               lfm_data_loader):
+            lfm_attempt = 0
+
             assert batch_position[-1] == batch_collision[-1] == batch_lfm[-1]
             task_id = batch_position[3][0]
 
@@ -557,12 +560,13 @@ class FlownetSolver:
             collided, solved, lfm_paths = simulate_action(sim, id, tasks[id],
                                                           pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
                                                           radius.squeeze(-1).detach(), num_attempts=num_random_attempts,
-                                                          save_rollouts_dir=save_rollouts_dir)
+                                                          save_rollouts_dir=save_rollouts_dir,
+                                                          red_ball_collision_scene=red_channel_collision)
 
             last_red_ball_pred = draw_ball(size, pred_y, pred_x, radius.squeeze(1).detach().cpu().numpy() * size[0])
 
-            while not solved and num_lfm_attempts:
-                num_lfm_attempts -= 1
+            while not solved and lfm_attempt < num_lfm_attempts:
+                lfm_attempt += 1
 
                 # LfM Model
                 X_image = batch_lfm[0].float().to(self.device)
@@ -586,7 +590,8 @@ class FlownetSolver:
                                                               1. - pred_x / (self.width - 1.),
                                                               radius.squeeze(-1).detach(),
                                                               num_attempts=num_random_attempts,
-                                                              save_rollouts_dir=save_rollouts_dir)
+                                                              save_rollouts_dir=save_rollouts_dir,
+                                                              red_ball_collision_scene=red_channel_collision)
 
                 last_red_ball_pred = draw_ball(size, pred_y, pred_x, radius.squeeze(1).detach().cpu().numpy() * size[0])
 
@@ -598,6 +603,8 @@ class FlownetSolver:
                 metrics_table[template][1][0] += 1
             if not collided and solved:
                 doubt_ids.append(task_id)
+            if 0 < lfm_attempt < 10:
+                lfm_works += 1
 
             metrics_table[template][0][1] += 1
             metrics_table[template][1][1] += 1

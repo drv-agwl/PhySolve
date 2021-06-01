@@ -62,8 +62,10 @@ if __name__ == '__main__':
     if args.simulate_model:
         solver.simulate_combined(collision_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/26.pt",
                                  position_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/PositionModel/32.pt",
-                                 lfm_ckpt='/home/dhruv/Desktop/PhySolve/checkpoints/LfM/35.pt',
+                                 lfm_ckpt='/home/dhruv/Desktop/PhySolve/checkpoints/LfM/51.pt',
                                  data_paths=paths,
                                  batch_size=1,
                                  save_rollouts_dir=args.save_rollouts_dir,
-                                 device=args.device)
+                                 device=args.device,
+                                 num_lfm_attempts=20,
+                                 num_random_attempts=0)

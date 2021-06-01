@@ -1,5 +1,5 @@
 import os
-
+import cv2
 import phyre
 import numpy as np
 from DataCollection.data_collector import get_collision_timestep, get_obj_channels
@@ -13,7 +13,8 @@ cache_actions = cache.action_array
 
 
 def simulate_action(sim, task_idx, task_id, x, y, r,
-                    num_attempts=10, save_rollouts_dir=None, size=(64, 64)):
+                    num_attempts=10, save_rollouts_dir=None, size=(64, 64),
+                    red_ball_collision_scene=None):
     x = x * 256. / 255.
     y = y * 256. / 255.
 
@@ -66,13 +67,15 @@ def simulate_action(sim, task_idx, task_id, x, y, r,
 
                 if save_rollouts_dir is not None:
                     collision_scene = get_solving_collision_scene(sim, task_id, task_idx)
-                    save_rollout_as_gif(res, collision_scene, save_rollouts_dir, "solved", task_id)
+                    save_rollout_as_gif(res, collision_scene, red_ball_collision_scene,
+                                        save_rollouts_dir, "solved", task_id)
 
                 return collided, solved, imgs_lfm
             else:
                 if save_rollouts_dir is not None:
                     collision_scene = get_solving_collision_scene(sim, task_id, task_idx)
-                    save_rollout_as_gif(res, collision_scene, save_rollouts_dir, "unsolved", task_id)
+                    save_rollout_as_gif(res, collision_scene, red_ball_collision_scene,
+                                        save_rollouts_dir, "unsolved", task_id)
         except:
             continue
 
@@ -80,9 +83,11 @@ def simulate_action(sim, task_idx, task_id, x, y, r,
         try:
             collision_scene = get_solving_collision_scene(sim, task_id, task_idx)
             if solved:
-                save_rollout_as_gif(res_first_guess, collision_scene, save_rollouts_dir, "solved", task_id)
+                save_rollout_as_gif(res_first_guess, collision_scene,
+                                    red_ball_collision_scene, save_rollouts_dir, "solved", task_id)
             else:
-                save_rollout_as_gif(res_first_guess, collision_scene, save_rollouts_dir, "unsolved", task_id)
+                save_rollout_as_gif(res_first_guess, collision_scene,
+                                    red_ball_collision_scene, save_rollouts_dir, "unsolved", task_id)
         except:
             pass
     return collided, solved, imgs_lfm
@@ -125,7 +130,7 @@ def get_solving_collision_scene(sim, task_id, task_idx):
     return np.zeros((256, 256, 3))
 
 
-def save_rollout_as_gif(res, collision_scene, save_dir, status, task_id):
+def save_rollout_as_gif(res, collision_scene, red_ball_collision_scene, save_dir, status, task_id):
     template = f"Task-{str(int(task_id.split(':')[0]))}"
     os.makedirs(osp.join(save_dir, template, status), exist_ok=True)
     start_sleep = 100
@@ -135,17 +140,17 @@ def save_rollout_as_gif(res, collision_scene, save_dir, status, task_id):
     text_pred = np.repeat(get_text_image("Predicted Solution")[None], start_sleep // 2, axis=0)
 
     pred_collision_scene_idx = get_collision_timestep(res)
-    pred_collision_scene = np.zeros((64, 64, 3))
+    # pred_collision_scene = np.zeros((64, 64, 3))
 
-    if pred_collision_scene_idx != -1:
-        pred_collision_scene = res.images[pred_collision_scene_idx]
+    # if pred_collision_scene_idx != -1:
+    #     pred_collision_scene = res.images[pred_collision_scene_idx]
 
     sim_collision_scene = np.concatenate(
         [phyre.observations_to_uint8_rgb(x)[None] for x in np.repeat(collision_scene[None], start_sleep,
                                                                      axis=0)])
     pred_collision_scene = np.concatenate(
-        [phyre.observations_to_uint8_rgb(x)[None] for x in np.repeat(pred_collision_scene[None],
-                                                                     start_sleep, axis=0)])
+        [np.flip(phyre.observations_to_uint8_rgb(cv2.resize(x, (256, 256)).astype(np.uint8)), axis=0)[None]
+         for x in np.repeat(red_ball_collision_scene[None],  start_sleep, axis=0)])
     rollout = np.concatenate([phyre.observations_to_uint8_rgb(res.images[i])[None] for i in range(0, len(res.images), 10)])
 
     rollout = np.concatenate([text_solving_collision, sim_collision_scene,
