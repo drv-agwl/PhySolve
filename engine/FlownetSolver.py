@@ -177,13 +177,14 @@ def rescale(x):
 
 
 class FlownetSolver:
-    def __init__(self, seq_len, width, device):
+    def __init__(self, args, seq_len, width, device):
         super().__init__()
         self.device = ("cuda" if T.cuda.is_available() else "cpu") if device == "cuda" else "cpu"
         print("device:", self.device)
         self.seq_len = seq_len
         self.width = width
         self.logger = dict()
+        self.args = args
 
         self.collision_model = Pyramid(seq_len * 2 + seq_len // 2 + 2, 1)
         self.position_model = Pyramid2(4, 1)
@@ -557,7 +558,7 @@ class FlownetSolver:
 
             pred_y, pred_x = self.get_position_pred(red_ball_pred, radius.squeeze(1).detach().cpu().numpy() * 2)
 
-            collided, solved, lfm_paths = simulate_action(sim, id, tasks[id],
+            collided, solved, lfm_paths = simulate_action(self.args, sim, id, tasks[id],
                                                           pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
                                                           radius.squeeze(-1).detach(), num_attempts=num_random_attempts,
                                                           save_rollouts_dir=save_rollouts_dir,
@@ -585,7 +586,7 @@ class FlownetSolver:
 
                 pred_y, pred_x = self.get_position_pred(red_ball_pred, radius.squeeze(1).detach().cpu().numpy() * 2)
 
-                collided, solved, lfm_paths = simulate_action(sim, id, tasks[id],
+                collided, solved, lfm_paths = simulate_action(self.args, sim, id, tasks[id],
                                                               pred_y / (self.width - 1.),
                                                               1. - pred_x / (self.width - 1.),
                                                               radius.squeeze(-1).detach(),
@@ -679,7 +680,7 @@ class FlownetSolver:
 
             pred_y, pred_x = self.get_position_pred(red_ball_pred, X_red_diam.cpu().numpy())
 
-            solved = simulate_action(sim, id,
+            solved = simulate_action(self.args, sim, id,
                                      pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
                                      X_red_diam / 2.,
                                      save_rollouts=True)

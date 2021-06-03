@@ -32,7 +32,7 @@ if __name__ == '__main__':
     data_dir = osp.join(args.root_dir, "DataCollection/Database")
     paths = [osp.join(data_dir, i) for i in os.listdir(data_dir)]
 
-    solver = FlownetSolver(5, 64, args.device)
+    solver = FlownetSolver(args, 5, 64, args.device)
 
     if args.train_position_model:
         solver.train_position_model(data_paths=paths,
