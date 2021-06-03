@@ -475,9 +475,9 @@ class FlownetSolver:
 
         size = (self.width, self.width)
 
-        self.collision_model.load_state_dict(T.load(collision_ckpt))
-        self.position_model.load_state_dict(T.load(position_ckpt))
-        self.lfm.load_state_dict(T.load(lfm_ckpt))
+        self.collision_model.load_state_dict(T.load(collision_ckpt, map_location=device))
+        self.position_model.load_state_dict(T.load(position_ckpt, map_location=device))
+        self.lfm.load_state_dict(T.load(lfm_ckpt, map_location=device))
 
         data_collision = load_data_collision(data_paths, self.seq_len, all_samples=True, shuffle=False)
         data_position = load_data_position(data_paths, self.seq_len, all_samples=True, shuffle=False)
