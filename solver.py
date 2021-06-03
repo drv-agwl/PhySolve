@@ -20,6 +20,7 @@ def get_args_parser():
     parser.add_argument('--smooth_loss', default=False, type=bool)
     parser.add_argument('--device', default='cuda')
     parser.add_argument('--save_rollouts_dir', default=None, type=str)
+    parser.add_argument('--root_dir', default='./', type=str)
 
     return parser
 
@@ -28,8 +29,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser("PhySolve", parents=[get_args_parser()])
     args = parser.parse_args()
 
-    data_dir = "./DataCollection/Database"
-
+    data_dir = osp.join(args.root_dir, "DataCollection/Database")
     paths = [osp.join(data_dir, i) for i in os.listdir(data_dir)]
 
     solver = FlownetSolver(5, 64, args.device)
@@ -50,19 +50,19 @@ if __name__ == '__main__':
                          smooth_loss=args.smooth_loss)
 
     if args.simulate_collision_model:
-        solver.simulate_collision_model(checkpoint='/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/26.pt',
+        solver.simulate_collision_model(checkpoint=osp.join(args.root_dir, 'checkpoints/CollisionModel/26.pt'),
                                         data_paths=paths,
                                         batch_size=1)
 
     if args.simulate_position_model:
-        solver.simulate_position_model(checkpoint="/home/dhruv/Desktop/PhySolve/checkpoints/PositionModel/32.pt",
+        solver.simulate_position_model(checkpoint=osp.join(args.root_dir, 'checkpoints/PositionModel/32.pt'),
                                        data_paths=paths,
                                        batch_size=1)
 
     if args.simulate_model:
-        solver.simulate_combined(collision_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/CollisionModel/26.pt",
-                                 position_ckpt="/home/dhruv/Desktop/PhySolve/checkpoints/PositionModel/32.pt",
-                                 lfm_ckpt='/home/dhruv/Desktop/PhySolve/checkpoints/LfM/51.pt',
+        solver.simulate_combined(collision_ckpt=osp.join(args.root_dir, 'checkpoints/CollisionModel/26.pt'),
+                                 position_ckpt=osp.join(args.root_dir, 'checkpoints/PositionModel/32.pt'),
+                                 lfm_ckpt=osp.join('checkpoints/LfM/51.pt'),
                                  data_paths=paths,
                                  batch_size=1,
                                  save_rollouts_dir=args.save_rollouts_dir,
