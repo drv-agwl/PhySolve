@@ -467,7 +467,7 @@ class FlownetSolver:
             pred_y, pred_x = self.get_position_pred(red_ball_preds[0], X_red_diam.cpu().numpy())
 
     def simulate_combined(self, collision_ckpt, position_ckpt, lfm_ckpt, data_paths, batch_size=32,
-                          save_rollouts_dir="/home/dhruv/Desktop/PhySolve/results/saved_rollouts", device='cuda',
+                          save_rollouts_dir="./results/saved_rollouts", device='cuda',
                           num_lfm_attempts=10, num_random_attempts=0):
         self.collision_model.to(device).eval()
         self.position_model.to(device).eval()

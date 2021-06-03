@@ -12,7 +12,7 @@ cache = phyre.get_default_100k_cache('ball')
 cache_actions = cache.action_array
 
 
-def simulate_action(sim, task_idx, task_id, x, y, r,
+def simulate_action(args, sim, task_idx, task_id, x, y, r,
                     num_attempts=10, save_rollouts_dir=None, size=(64, 64),
                     red_ball_collision_scene=None):
     x = x * 256. / 255.
@@ -67,14 +67,14 @@ def simulate_action(sim, task_idx, task_id, x, y, r,
 
                 if save_rollouts_dir is not None:
                     collision_scene = get_solving_collision_scene(sim, task_id, task_idx)
-                    save_rollout_as_gif(res, collision_scene, red_ball_collision_scene,
+                    save_rollout_as_gif(args, res, collision_scene, red_ball_collision_scene,
                                         save_rollouts_dir, "solved", task_id)
 
                 return collided, solved, imgs_lfm
             else:
                 if save_rollouts_dir is not None:
                     collision_scene = get_solving_collision_scene(sim, task_id, task_idx)
-                    save_rollout_as_gif(res, collision_scene, red_ball_collision_scene,
+                    save_rollout_as_gif(args, res, collision_scene, red_ball_collision_scene,
                                         save_rollouts_dir, "unsolved", task_id)
         except:
             continue
@@ -83,20 +83,20 @@ def simulate_action(sim, task_idx, task_id, x, y, r,
         try:
             collision_scene = get_solving_collision_scene(sim, task_id, task_idx)
             if solved:
-                save_rollout_as_gif(res_first_guess, collision_scene,
+                save_rollout_as_gif(args, res_first_guess, collision_scene,
                                     red_ball_collision_scene, save_rollouts_dir, "solved", task_id)
             else:
-                save_rollout_as_gif(res_first_guess, collision_scene,
+                save_rollout_as_gif(args, res_first_guess, collision_scene,
                                     red_ball_collision_scene, save_rollouts_dir, "unsolved", task_id)
         except:
             pass
     return collided, solved, imgs_lfm
 
 
-def get_text_image(text, size=(256, 256, 3)):
+def get_text_image(text, font_path, size=(256, 256, 3)):
     img = Image.new('RGB', (256, 256), color=(255, 255, 255))
     d = ImageDraw.Draw(img)
-    font = ImageFont.truetype('/home/dhruv/Desktop/PhySolve/arial.ttf', 15)
+    font = ImageFont.truetype(font_path, 15)
     d.text((15, 110), text, font=font, fill=(255, 0, 0), align="center")
     return np.array(img)
 
@@ -130,14 +130,17 @@ def get_solving_collision_scene(sim, task_id, task_idx):
     return np.zeros((256, 256, 3))
 
 
-def save_rollout_as_gif(res, collision_scene, red_ball_collision_scene, save_dir, status, task_id):
+def save_rollout_as_gif(args, res, collision_scene, red_ball_collision_scene, save_dir, status, task_id, font_path):
+    font_path = osp.join(args.root_dir, "arial.ttf")
     template = f"Task-{str(int(task_id.split(':')[0]))}"
     os.makedirs(osp.join(save_dir, template, status), exist_ok=True)
     start_sleep = 100
 
-    text_solving_collision = np.repeat(get_text_image("Simulator Collision scene")[None], start_sleep // 2, axis=0)
-    text_predicted_collision = np.repeat(get_text_image("Predicted Collision scene")[None], start_sleep // 2, axis=0)
-    text_pred = np.repeat(get_text_image("Predicted Solution")[None], start_sleep // 2, axis=0)
+    text_solving_collision = np.repeat(get_text_image("Simulator Collision scene", font_path=font_path)[None],
+                                       start_sleep // 2, axis=0)
+    text_predicted_collision = np.repeat(get_text_image("Predicted Collision scene", font_path=font_path)[None],
+                                         start_sleep // 2, axis=0)
+    text_pred = np.repeat(get_text_image("Predicted Solution", font_path=font_path)[None], start_sleep // 2, axis=0)
 
     pred_collision_scene_idx = get_collision_timestep(res)
     # pred_collision_scene = np.zeros((64, 64, 3))

@@ -32,7 +32,7 @@ stride = 1
 save_ind = 500
 font = ImageFont.truetype("./arial.ttf", 10)  # Keyboard.ttf
 
-with open("./095_collected_traj_256.pickle", 'rb') as handle:
+with open("./DataCollection/095_collected_traj_256.pickle", 'rb') as handle:
     tr_xy256 = pickle.load(handle)  # ±256 pixel representation of 12x5 trajectories
 
 
