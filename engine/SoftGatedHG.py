@@ -37,7 +37,7 @@ class SoftGatedHG(nn.Module):
                         nn.Sequential(nn.ConvTranspose2d(16, 8, 4, 2, 1),
                                       nn.ReLU()),
                         nn.Sequential(nn.ConvTranspose2d(8, out_channels, 4, 2, 1),
-                                      nn.ReLU())]
+                                      nn.Sigmoid())]
 
         assert len(self.encoder) == len(self.decoder)
 
@@ -85,8 +85,10 @@ class SoftGatedHG(nn.Module):
 
         num_encodings = len(encodings)
 
-        for i, layer in enumerate(self.decoder):
+        for i, layer in enumerate(self.decoder[:-1]):
             x = self.skip_layers[num_encodings-i-2](encodings[num_encodings-i-2]) + layer(x)
+
+        x = self.decoder[-1](x)
 
         if self.pred_radius:
             return x, r

@@ -187,16 +187,16 @@ class FlownetSolver:
         self.logger = dict()
         self.args = args
 
-        # self.collision_model = Pyramid(seq_len * 2 + seq_len // 2 + 2, 1).to(device)
-        # self.position_model = Pyramid2(4, 1).to(device)
-        # self.lfm = LfM(7, 1).to(device)
+        self.collision_model = Pyramid(seq_len * 2 + seq_len // 2 + 2, 1)
+        self.position_model = Pyramid2(4, 1)
+        self.lfm = LfM(7, 1)
 
-        self.collision_model = SoftGatedHG(in_channels=seq_len * 2 + seq_len // 2 + 2, out_channels=1,
-                                           time_channel=False, pred_radius=True, device=device)
-        self.position_model = SoftGatedHG(in_channels=4, out_channels=1,
-                                          time_channel=True, pred_radius=False, device=device)
-        self.lfm = SoftGatedHG(in_channels=7, out_channels=1,
-                               time_channel=True, pred_radius=False, device=device)
+        # self.collision_model = SoftGatedHG(in_channels=seq_len * 2 + seq_len // 2 + 2, out_channels=1,
+        #                                    time_channel=False, pred_radius=True, device=device)
+        # self.position_model = SoftGatedHG(in_channels=4, out_channels=1,
+        #                                   time_channel=True, pred_radius=False, device=device)
+        # self.lfm = SoftGatedHG(in_channels=7, out_channels=1,
+        #                        time_channel=True, pred_radius=False, device=device)
 
         print("succesfully initialized models")
 
