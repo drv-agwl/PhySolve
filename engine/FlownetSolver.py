@@ -13,6 +13,7 @@ from PIL import Image, ImageDraw
 from engine.phyre_utils import simulate_action
 from tqdm import tqdm
 from engine.data_utils import draw_ball
+from engine.SoftGatedHG import SoftGatedHG
 import pandas as pd
 from engine.LfM import LfM
 
@@ -186,9 +187,16 @@ class FlownetSolver:
         self.logger = dict()
         self.args = args
 
-        self.collision_model = Pyramid(seq_len * 2 + seq_len // 2 + 2, 1)
-        self.position_model = Pyramid2(4, 1)
-        self.lfm = LfM(7, 1)
+        # self.collision_model = Pyramid(seq_len * 2 + seq_len // 2 + 2, 1).to(device)
+        # self.position_model = Pyramid2(4, 1).to(device)
+        # self.lfm = LfM(7, 1).to(device)
+
+        self.collision_model = SoftGatedHG(in_channels=seq_len * 2 + seq_len // 2 + 2, out_channels=1,
+                                           time_channel=False, pred_radius=True, device=device)
+        self.position_model = SoftGatedHG(in_channels=4, out_channels=1,
+                                          time_channel=True, pred_radius=False, device=device)
+        self.lfm = SoftGatedHG(in_channels=7, out_channels=1,
+                               time_channel=True, pred_radius=False, device=device)
 
         print("succesfully initialized models")
 
@@ -196,15 +204,13 @@ class FlownetSolver:
         if self.device == "cuda":
             self.collision_model.cuda()
 
-        size = (width, width)
-
         train_loss_log = []
         val_loss_log = []
 
         opti = T.optim.Adam(self.collision_model.parameters(recurse=True), lr=3e-4)
         scheduler = T.optim.lr_scheduler.ReduceLROnPlateau(opti, 'min', patience=5, verbose=True)
 
-        train_data, test_data = load_data_collision(data_paths, self.seq_len, size)
+        train_data, test_data = load_data_collision(data_paths, self.seq_len)
 
         train_data_loader = T.utils.data.DataLoader(CollisionDataset(train_data),
                                                     batch_size, shuffle=True)
@@ -271,8 +277,8 @@ class FlownetSolver:
                     print(f"Epoch-{epoch}, iteration-{i}: Loss = {loss.item()}")
 
                 if len(rows) == 5:
-                    os.makedirs(f"./results/train/CollisionModel/{epoch + 1}", exist_ok=True)
-                    save_img_dir = f"./results/train/CollisionModel/{epoch + 1}/"
+                    os.makedirs(f"./results/train/CollisionModel/SoftGatedHG/{epoch + 1}", exist_ok=True)
+                    save_img_dir = f"./results/train/CollisionModel/SoftGatedHG/{epoch + 1}/"
                     vis_pred_path_task(rows, save_img_dir, pic_no)
                     pic_no += 1
                     rows = []
@@ -284,8 +290,8 @@ class FlownetSolver:
             losses = []
             rows = []
             print("Validation")
-            os.makedirs("./checkpoints/CollisionModel", exist_ok=True)
-            T.save(self.collision_model.state_dict(), f"./checkpoints/CollisionModel/{epoch + 1}.pt")
+            os.makedirs("./checkpoints/CollisionModel/SoftGatedHG/", exist_ok=True)
+            T.save(self.collision_model.state_dict(), f"./checkpoints/CollisionModel/SoftGatedHG/{epoch + 1}.pt")
             for i, batch in enumerate(test_data_loader):
                 X_image = batch[0].float().to(self.device)
                 radius = batch[1].float().to(self.device) / 2.
@@ -345,8 +351,8 @@ class FlownetSolver:
                     print(f"Epoch-{epoch}, iteration-{i}: Loss = {loss.item()}")
 
                 if len(rows) == 5 or len(rows) == 7:
-                    os.makedirs(f"./results/test/CollisionModel/{epoch + 1}", exist_ok=True)
-                    save_img_dir = f"./results/test/CollisionModel/{epoch + 1}/"
+                    os.makedirs(f"./results/test/CollisionModel/SoftGatedHG/{epoch + 1}", exist_ok=True)
+                    save_img_dir = f"./results/test/CollisionModel/SoftGatedHG/{epoch + 1}/"
                     vis_pred_path_task(rows, save_img_dir, pic_no)
                     pic_no += 1
                     rows = []
@@ -357,8 +363,8 @@ class FlownetSolver:
 
             pic_no = 1
 
-        os.makedirs("./logs/CollisionModel", exist_ok=True)
-        with open(f"./logs/CollisionModel/{epochs}.pkl", "wb") as f:
+        os.makedirs("./logs/CollisionModel/SoftGatedHG/", exist_ok=True)
+        with open(f"./logs/CollisionModel/SoftGatedHG/{epochs}.pkl", "wb") as f:
             pickle.dump({"Train losses": train_loss_log,
                          "Test losses": val_loss_log}, f)
 
