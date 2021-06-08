@@ -130,7 +130,11 @@ def get_solving_collision_scene(sim, task_id, task_idx):
     return np.zeros((256, 256, 3))
 
 
-def save_rollout_as_gif(args, res, collision_scene, red_ball_collision_scene, save_dir, status, task_id, font_path):
+def save_rollout_as_gif(args, res, collision_scene, red_ball_collision_scene, save_dir, status, task_id):
+    """
+    collision scene: Collision scene by simulator from cached solutions
+    red_ball_collision_scene: Red ball at the time of collision, predicted by the model
+    """
     font_path = osp.join(args.root_dir, "arial.ttf")
     template = f"Task-{str(int(task_id.split(':')[0]))}"
     os.makedirs(osp.join(save_dir, template, status), exist_ok=True)
@@ -154,7 +158,17 @@ def save_rollout_as_gif(args, res, collision_scene, red_ball_collision_scene, sa
     pred_collision_scene = np.concatenate(
         [np.flip(phyre.observations_to_uint8_rgb(cv2.resize(x, (256, 256)).astype(np.uint8)), axis=0)[None]
          for x in np.repeat(red_ball_collision_scene[None],  start_sleep, axis=0)])
-    rollout = np.concatenate([phyre.observations_to_uint8_rgb(res.images[i])[None] for i in range(0, len(res.images), 10)])
+
+    collision_timestep = get_collision_timestep(res)
+
+    empty_channel = np.zeros((256, 256, 1))
+    overlap = phyre.observations_to_uint8_rgb(res.images[collision_timestep])
+    red_ball_collision_scene = np.concatenate([empty_channel, empty_channel, red_ball_collision_scene])
+    overlap = np.max(overlap, red_ball_collision_scene, axis=2)
+
+    rollout_images = res.images[:collision_timestep] + [overlap]*10 + res.images[collision_timestep+1:]
+    rollout = np.concatenate([phyre.observations_to_uint8_rgb(rollout_images[i])[None]
+                              for i in range(0, len(rollout_images), 5)])
 
     rollout = np.concatenate([text_solving_collision, sim_collision_scene,
                               text_predicted_collision, pred_collision_scene,
