@@ -433,6 +433,11 @@ class FlownetSolver:
         kernel = np.array(kernel).astype(np.float)
 
         pred_channel = pred_channel.detach().cpu().numpy()[0][0]
+        # # code snippet for debugging
+        # import matplotlib
+        # matplotlib.use('MacOSX')
+        # import matplotlib.pyplot as plt
+        # plt.imshow(pred_channel)
 
         filtered = cv2.filter2D(src=pred_channel, kernel=kernel, ddepth=-1)
 
@@ -480,9 +485,9 @@ class FlownetSolver:
         self.position_model.load_state_dict(T.load(position_ckpt, map_location=device))
         self.lfm.load_state_dict(T.load(lfm_ckpt, map_location=device))
 
-        data_collision = load_data_collision(data_paths, self.seq_len, all_samples=True, shuffle=False)
-        data_position = load_data_position(data_paths, self.seq_len, all_samples=True, shuffle=False)
-        data_lfm = load_lfm_data(data_paths, self.seq_len, all_samples=True, shuffle=False)
+        data_collision = load_data_collision(data_paths, self.seq_len, all_samples=True, shuffle=False, debug=True)
+        data_position = load_data_position(data_paths, self.seq_len, all_samples=True, shuffle=False, debug=True)
+        data_lfm = load_lfm_data(data_paths, self.seq_len, all_samples=True, shuffle=False, debug=True)
 
         collision_data_loader = T.utils.data.DataLoader(CollisionDataset(data_collision),
                                                         batch_size, shuffle=False)
@@ -539,6 +544,14 @@ class FlownetSolver:
             for timestep in range(1):
                 red_ball_pred, radius = self.collision_model(model_input)
                 red_ball_preds.append(red_ball_pred)
+                # # code snippet for debugging
+                # import matplotlib
+                # matplotlib.use('MacOSX')
+                # import matplotlib.pyplot as plt
+                # plt.imshow(np.moveaxis(red_ball_pred.squeeze(1).detach().cpu().numpy(), 0, -1))
+                # plt.imshow(np.sum(model_input.squeeze().detach().cpu().numpy()))
+                # plt.imshow(np.sum(X_image.squeeze().detach().cpu().numpy(), axis=0))
+                # plt.imshow(np.sum(model_input[0].squeeze().detach().cpu().numpy(), axis=0))
 
             pred_x, pred_y = self.get_position_pred(red_ball_preds[0], radius.squeeze(1).detach().cpu().numpy() * 2)
             red_channel_collision = draw_ball(size, pred_y, pred_x,

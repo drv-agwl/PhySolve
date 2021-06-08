@@ -14,10 +14,12 @@ def draw_ball(size, y, x, r):
     return np.asarray(img)
 
 
-def load_data_collision(data_paths, seq_len, all_samples=False, shuffle=True):
+def load_data_collision(data_paths, seq_len, all_samples=False, shuffle=True, debug=False):
     channels = range(1, 7)
     train_data = []
-    for data_path in sorted(data_paths):
+    for i, data_path in enumerate(sorted(data_paths)):
+        if debug and i == 1:
+            break
         with gzip.open(data_path, 'rb') as fp:
             task_data = pickle.load(fp)
         for data in task_data:
@@ -66,12 +68,14 @@ def load_data_collision(data_paths, seq_len, all_samples=False, shuffle=True):
     return train_data, test_data
 
 
-def load_data_position(data_paths, seq_len, all_samples=False, shuffle=True):
+def load_data_position(data_paths, seq_len, all_samples=False, shuffle=True, debug=False):
     channels = range(1, 7)
 
     train_data = []
 
-    for data_path in sorted(data_paths):
+    for i, data_path in enumerate(sorted(data_paths)):
+        if debug and i == 1:
+            break
         with gzip.open(data_path, 'rb') as fp:
             task_data = pickle.load(fp)
         for data in task_data:
@@ -134,10 +138,12 @@ def load_data_position(data_paths, seq_len, all_samples=False, shuffle=True):
     return train_data, test_data
 
 
-def load_lfm_data(data_paths, seq_len, all_samples=False, shuffle=True):
+def load_lfm_data(data_paths, seq_len, all_samples=False, shuffle=True, debug=False):
     train_data = []
 
-    for data_path in sorted(data_paths):
+    for i, data_path in enumerate(sorted(data_paths)):
+        if debug and i == 1:
+            break
         with gzip.open(data_path, 'rb') as fp:
             task_data = pickle.load(fp)
         for data in task_data:
