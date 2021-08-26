@@ -13,6 +13,7 @@ def get_args_parser():
 
     parser.add_argument('--train_collision_model', default=False, type=bool)
     parser.add_argument('--train_position_model', default=False, type=bool)
+    parser.add_argument('--train_unsupervised', default=False, type=bool)
     parser.add_argument('--train_lfm', default=False, type=bool)
     parser.add_argument('--simulate_collision_model', default=False, type=bool)
     parser.add_argument('--simulate_position_model', default=False, type=bool)
@@ -20,6 +21,7 @@ def get_args_parser():
     parser.add_argument('--smooth_loss', default=False, type=bool)
     parser.add_argument('--device', default='cuda')
     parser.add_argument('--save_rollouts_dir', default=None, type=str)
+    parser.add_argument('--visualise_dir', default=None, type=str)
     parser.add_argument('--root_dir', default='./', type=str)
 
     return parser
@@ -66,6 +68,12 @@ if __name__ == '__main__':
                                  data_paths=paths,
                                  batch_size=1,
                                  save_rollouts_dir=args.save_rollouts_dir,
+                                 visualise_dir=args.visualise_dir,
                                  device=args.device,
                                  num_lfm_attempts=20,
-                                 num_random_attempts=0)
+                                 num_random_attempts=0,
+                                 visualize=True)
+
+    if args.train_unsupervised:
+        solver.train_unsupervised(data_paths=paths,
+                                  epochs=100)

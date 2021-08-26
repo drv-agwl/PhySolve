@@ -33,7 +33,7 @@ def invert_bg(X, black_channel=None):
     return white_bg
 
 
-def vis_pred_path_task(batch_images, save_dir, pic_id):
+def vis_pred_path_task(batch_images, save_dir, pic_id, format="RGB"):
     num_rows = len(batch_images)
     h = batch_images[0][0].shape[0]
     w = batch_images[0][0].shape[1]
@@ -43,7 +43,10 @@ def vis_pred_path_task(batch_images, save_dir, pic_id):
     for row in batch_images:
         num_cols = max(num_cols, len(row))
 
-    grid = np.ones((h * num_rows + sep * (num_rows - 1), w * num_cols + sep * (num_cols - 1), 3)) / 2.
+    if format == "RGB":
+        grid = np.ones((h * num_rows + sep * (num_rows - 1), w * num_cols + sep * (num_cols - 1), 3)) / 2.
+    else:
+        grid = np.ones((h * num_rows + sep * (num_rows - 1), w * num_cols + sep * (num_cols - 1))) / 2.
 
     h_start = 0
     h_end = h
@@ -51,12 +54,17 @@ def vis_pred_path_task(batch_images, save_dir, pic_id):
         w_start = 0
         w_end = w
         for image in row:
-            if image.shape[-1] == 3:
+            if len(image.shape) == 2:
+                pass
+            elif image.shape[-1] == 3:
                 image = invert_bg(image)
             else:
                 image = invert_bg(image[:, :, :3], image[:, :, 3])
 
-            grid[h_start: h_end, w_start: w_end, :] = image
+            if format == "RGB":
+                grid[h_start: h_end, w_start: w_end, :] = image
+            else:
+                grid[h_start: h_end, w_start: w_end] = image
 
             w_start += (w + sep)
             w_end += (w + sep)
@@ -336,6 +344,26 @@ def draw_ball(w, x, y, r, invert_y=False):
     return (dist < r).float()
 
 
+def get_cross_image(size=(64, 64)):
+    image = np.zeros(size)
+    pilImage = Image.fromarray(image)
+    draw = ImageDraw.Draw(pilImage)
+    draw.line((0, 0, size[0], size[1]), fill=1)
+    draw.line((size[0], 0, 0, size[1]), fill=1)
+
+    return np.asarray(pilImage)
+
+
+def get_text_image(text, font_size, pos=(10, 25), size=(64, 64), font_loc="./arial.ttf"):
+    image = np.zeros(size)
+    pilImage = Image.fromarray(image)
+    draw = ImageDraw.Draw(pilImage)
+    font = ImageFont.truetype(font_loc, font_size)
+    draw.text(pos, text, fill=(1), font=font)
+
+    return np.asarray(pilImage)
+
+
 def action_delta_generator(pure_noise=False):
     temp = 1
     radfac = 0.025
@@ -536,7 +564,6 @@ def extract_individual_auccess(path):
         fp.writelines([str(round(item, 2))[-3:] + ' & ' for item in within] + ['\n'])
         fp.writelines([str(round(item, 2))[-3:] + ' & ' for item in cross] + ['\n'])
         fp.write(f"average {sum(within) / len(within)} {sum(cross) / (len(cross) - 1)}")
-
 
 
 def add_dijkstra_to_data(path):

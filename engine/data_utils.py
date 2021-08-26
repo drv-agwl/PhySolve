@@ -18,6 +18,8 @@ def load_data_collision(data_paths, seq_len, all_samples=False, shuffle=True):
     channels = range(1, 7)
     train_data = []
     for data_path in sorted(data_paths):
+        # if not data_path.split("/")[-1].startswith("00008"):
+        #     continue
         with gzip.open(data_path, 'rb') as fp:
             task_data = pickle.load(fp)
         for data in task_data:
@@ -46,6 +48,7 @@ def load_data_collision(data_paths, seq_len, all_samples=False, shuffle=True):
                 np.uint8)
             static_objs = np.max(obj_channels_solved[0, static_obj_idxs, :, :][None], axis=1).astype(np.uint8)
             red_ball_zeros = np.zeros_like(red_ball_gt).astype(np.uint8)
+            target_obj = np.max(obj_channels_solved[:, 3, :, :], axis=0).astype(np.uint8)
 
             combined = np.concatenate([green_ball_solved, green_ball_unsolved, static_objs, red_ball_zeros,
                                        red_ball_gt], axis=0).astype(np.uint8)
@@ -53,7 +56,8 @@ def load_data_collision(data_paths, seq_len, all_samples=False, shuffle=True):
             red_diam = features[0][-1][3]
             train_data.append({"Images": combined,
                                "Red_diam": red_diam,
-                               "task-id": task_id})
+                               "task-id": task_id,
+                               "Target_object": target_obj})
 
     if shuffle:
         np.random.seed(7)
@@ -71,7 +75,9 @@ def load_data_position(data_paths, seq_len, all_samples=False, shuffle=True):
 
     train_data = []
 
-    for data_path in sorted(data_paths):
+    for data_path in sorted(data_paths[:10]):
+        # if not data_path.split("/")[-1].startswith("00008"):
+        #     continue
         with gzip.open(data_path, 'rb') as fp:
             task_data = pickle.load(fp)
         for data in task_data:
@@ -138,6 +144,8 @@ def load_lfm_data(data_paths, seq_len, all_samples=False, shuffle=True):
     train_data = []
 
     for data_path in sorted(data_paths):
+        # if not data_path.split("/")[-1].startswith("00008"):
+        #     continue
         with gzip.open(data_path, 'rb') as fp:
             task_data = pickle.load(fp)
         for data in task_data:
