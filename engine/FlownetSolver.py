@@ -24,11 +24,11 @@ class PosModelDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         images = self.data[idx]["Images"]
-        collision_time = self.data[idx]["Collision_time"]
+        time = self.data[idx]["time"]
         red_diam = self.data[idx]["Red_diam"]
         task_id = self.data[idx]["task-id"]
 
-        return images, collision_time, red_diam, task_id
+        return images, time, red_diam, task_id
 
     def __len__(self):
         return len(self.data)
@@ -42,9 +42,9 @@ class CollisionDataset(torch.utils.data.Dataset):
         images = self.data[idx]["Images"]
         red_diam = self.data[idx]["Red_diam"]
         task_id = self.data[idx]["task-id"]
-        target_obj = self.data[idx]["Target_object"]
+        # target_obj = self.data[idx]["Target_object"]
 
-        return images, red_diam, target_obj, task_id
+        return images, red_diam, task_id
 
     def __len__(self):
         return len(self.data)
@@ -67,31 +67,6 @@ class Pyramid2(nn.Module):
                                      nn.Conv2d(64, 64, 4, 2, 1),
                                      nn.ReLU())
 
-        self.flatten = nn.Flatten()
-        self.dense = nn.Sequential(nn.Linear(64 * 1 * 1 + 1, 64 * 1 * 1),
-                                   nn.ReLU())
-
-        self.dense_down = nn.Sequential(nn.Linear(1 * 1 * 128, 128),
-                                        nn.ReLU(),
-                                        nn.Linear(128, 32),
-                                        nn.ReLU(),
-                                        nn.Linear(32, 8),
-                                        nn.ReLU(),
-                                        nn.Linear(8, 2),
-                                        nn.ReLU(),
-                                        nn.Linear(2, 1),
-                                        nn.ReLU(),
-                                        )
-
-        self.dense_up = nn.Sequential(nn.Linear(2, 8),
-                                      nn.ReLU(),
-                                      nn.Linear(8, 32),
-                                      nn.ReLU(),
-                                      nn.Linear(32, 128),
-                                      nn.ReLU(),
-                                      nn.Linear(128, 2 * 2 * 128),
-                                      nn.ReLU())
-
         self.decoder = nn.Sequential(nn.ConvTranspose2d(64, 64, 4, 2, 1),
                                      nn.ReLU(),
                                      nn.ConvTranspose2d(64, 64, 4, 2, 1),
@@ -108,11 +83,8 @@ class Pyramid2(nn.Module):
     def forward(self, x, time=None):
         if time is not None:
             x = torch.cat([x, time], dim=1)
-        x = self.encoder(x)
-        x = self.flatten(x)
 
-        b = x.size(0)
-        x = x.view(b, 64, 1, 1)
+        x = self.encoder(x)
         x = self.decoder(x)
 
         return x
@@ -175,7 +147,7 @@ class FlownetSolver:
         self.args = args
 
         self.collision_model = Pyramid(seq_len * 2 + seq_len // 2 + 2, 1)
-        self.position_model = Pyramid2(4, 1)
+        self.position_model = Pyramid2(3, 1)
         self.lfm = LfM(7, 1)
         self.position_model_unsupervised = Pyramid2(3, 1)
 
@@ -187,6 +159,79 @@ class FlownetSolver:
         #                        time_channel=True, pred_radius=False, device=device)
 
         print("succesfully initialized models")
+
+    def simulate_collision_model(self, data_paths, checkpoint,
+                                 batch_size=32, device='cuda',
+                                 visualize=True,
+                                 visualise_dir="results/visualisations/Collision_Model"):
+        if self.device == "cuda":
+            self.collision_model.cuda()
+
+        size = (self.width, self.width)
+        self.collision_model.to(device).eval()
+        self.collision_model.load_state_dict(T.load(checkpoint, map_location=device))
+
+        data = load_data_collision(data_paths, seq_len=5, all_samples=True, shuffle=False, debug=False)
+
+        data_loader = T.utils.data.DataLoader(CollisionDataset(data),
+                                              batch_size=batch_size, shuffle=False)
+
+        pic_no = 1
+
+        pbar = tqdm(len(data_loader))
+
+        template_count = {0: [],
+                          1: [],
+                          2: [],
+                          4: [],
+                          6: [],
+                          7: [],
+                          8: [],
+                          9: [],
+                          11: [],
+                          12: [],
+                          13: [],
+                          14: [],
+                          15: [],
+                          16: []}
+
+        for i, batch in enumerate(data_loader):
+            rows = []
+            X_image = batch[0].float().to(self.device)
+            task_ids = batch[-1]
+
+            num_steps = self.seq_len // 2 + 1
+            model_input = X_image[:, :2 * self.seq_len + 1 + num_steps]
+            red_ball_gt = X_image[:, 2 * self.seq_len + 1 + num_steps:]
+
+            red_ball_preds = []
+            for timestep in range(1):
+                red_ball_pred, pred_radius = self.collision_model(model_input)
+                red_ball_preds.append(red_ball_pred)
+
+            if visualize:
+                for j in range(model_input.shape[0]):
+                    task_id = task_ids[j]
+
+                    input_image = model_input[j]
+                    image = input_image.permute(1, 2, 0).cpu().numpy()
+                    # green_ball_solved_paths = np.max(image[:, :, :5], axis=-1)
+                    # green_ball_unsolved_paths = np.max(image[:, :, 5:10], axis=-1)
+                    green_ball_paths = np.max(image[:, :, :10], axis=-1)[..., None]
+                    static_objs = image[:, :, 10][..., None]
+                    collision_model_pred = red_ball_pred[j].permute(1, 2, 0).detach().cpu().numpy()
+                    gt_red = red_ball_gt[j, 0].cpu().numpy()[..., None]
+
+                    if len(template_count[int(task_id.split(":")[0])]) < 20:
+                        template_count[int(task_id.split(":")[0])].append(
+                            [np.concatenate([gt_red, green_ball_paths, collision_model_pred, static_objs],
+                                            axis=-1)])
+
+            pbar.update(1)
+
+        if visualize:
+            for template_no, rows in template_count.items():
+                vis_pred_path_task(rows, visualise_dir, f"Task-{template_no}", format="RGB")
 
     def train_collision_model(self, data_paths, epochs=100, width=128, batch_size=32, smooth_loss=False):
         if self.device == "cuda":
@@ -441,6 +486,7 @@ class FlownetSolver:
         elif num_pos > 1:
             # get the top num_pos for center of the ball according to the prbability map
             topk_pos = [np.unravel_index(i, filtered.shape) for i in (-filtered).argsort(axis=None)[:num_pos]]
+            topk_pos = [(pos[1], pos[0]) for pos in topk_pos]
             return topk_pos
 
     def get_collision_model_preds(self, checkpoint, data_paths, batch_size=32):
@@ -473,28 +519,30 @@ class FlownetSolver:
     def simulate_combined(self, collision_ckpt, position_ckpt, lfm_ckpt, data_paths, batch_size=32,
                           save_rollouts_dir="./results/saved_rollouts", visualise_dir="./results/visualisations",
                           device='cuda',
-                          num_lfm_attempts=10, num_random_attempts=0, visualize=False):
+                          num_lfm_attempts=0, num_random_attempts=0, visualize=False,
+                          debug=False):
 
         self.collision_model.to(device).eval()
         self.position_model.to(device).eval()
-        self.lfm.to(device).eval()
+        # self.lfm.to(device).eval()
 
         size = (self.width, self.width)
 
         self.collision_model.load_state_dict(T.load(collision_ckpt, map_location=device))
         self.position_model.load_state_dict(T.load(position_ckpt, map_location=device))
-        self.lfm.load_state_dict(T.load(lfm_ckpt, map_location=device))
+        # self.lfm.load_state_dict(T.load(lfm_ckpt, map_location=device))
 
-        data_collision = load_data_collision(data_paths, self.seq_len, all_samples=True, shuffle=False, debug=True)
-        data_position = load_data_position(data_paths, self.seq_len, all_samples=True, shuffle=False, debug=True)
-        data_lfm = load_lfm_data(data_paths, self.seq_len, all_samples=True, shuffle=False, debug=True)
+        data_collision = load_data_collision(data_paths, self.seq_len, all_samples=True, shuffle=False, debug=debug)
+        data_position = load_data_position(data_paths, self.seq_len, all_samples=True, shuffle=False, debug=debug,
+                                           training=False)
+        # data_lfm = load_lfm_data(data_paths, self.seq_len, all_samples=True, shuffle=False, debug=False)
 
         collision_data_loader = T.utils.data.DataLoader(CollisionDataset(data_collision),
                                                         batch_size, shuffle=False)
         position_data_loader = T.utils.data.DataLoader(PosModelDataset(data_position),
                                                        batch_size, shuffle=False)
-        lfm_data_loader = T.utils.data.DataLoader(PosModelDataset(data_lfm), batch_size,
-                                                  shuffle=False)
+        # lfm_data_loader = T.utils.data.DataLoader(PosModelDataset(data_lfm), batch_size,
+        #                                           shuffle=False)
 
         task_idxs, tasks = [], []
         id = 0
@@ -519,8 +567,7 @@ class FlownetSolver:
 
         id = 0
         lfm_works = 0
-        for batch_collision, batch_position, batch_lfm in zip(collision_data_loader, position_data_loader,
-                                                              lfm_data_loader):
+        for batch_collision, batch_position in zip(collision_data_loader, position_data_loader):
             lfm_attempt = 0
             if visualize:
                 row_titles = [get_text_image("Model", font_size=10),
@@ -528,7 +575,7 @@ class FlownetSolver:
                               get_text_image("Input-2", font_size=10),
                               get_text_image("Static objs", font_size=12, pos=(0, 25)),
                               get_text_image("Time", font_size=12),
-                              get_text_image("G path - unsolved", font_size=10,pos=(0, 25)),
+                              get_text_image("G path - unsolved", font_size=10, pos=(0, 25)),
                               get_text_image("G path - prev attempt", font_size=10, pos=(0, 25)),
                               get_text_image("R - last pred", font_size=10, pos=(0, 25)),
                               get_text_image("R - pred", font_size=10),
@@ -538,7 +585,9 @@ class FlownetSolver:
                 row_collision = [get_text_image("Collision Model", font_size=10, pos=(0, 25))]
                 row_position = [get_text_image("Position Model", font_size=10, pos=(0, 25))]
 
-            assert batch_position[-1] == batch_collision[-1] == batch_lfm[-1]
+            # assert batch_position[-1] == batch_collision[-1] == batch_lfm[-1]
+            assert batch_position[-1] == batch_collision[-1]
+
             task_id = batch_position[3][0]
 
             template = task_id.split(":")[0]
@@ -550,7 +599,7 @@ class FlownetSolver:
 
             # Collision model prediction
             X_image = batch_collision[0].float().to(self.device)
-            target_obj = batch_collision[-2].cpu().numpy()[0]
+            # target_obj = batch_collision[-2].cpu().numpy()[0]
 
             num_steps = self.seq_len // 2 + 1
             model_input = X_image[:, :2 * self.seq_len + 1 + num_steps]
@@ -582,27 +631,29 @@ class FlownetSolver:
                 for cross_image in cross_images:
                     row_collision.append(cross_image)
                 row_collision.append(collision_model_pred)
-                row_collision.append(target_obj)
+                # row_collision.append(target_obj)
                 grid.append(row_collision)
 
-            pred_x, pred_y = self.get_position_pred(red_ball_preds[0], radius.squeeze(1).detach().cpu().numpy() * 2)
+            radius = batch_collision[1].float().to(self.device) / 2.  # radius from ground-truth
+
+            pred_x, pred_y = self.get_position_pred(red_ball_preds[0], radius.detach().cpu().numpy() * 2)
             red_channel_collision = draw_ball(size, pred_y, pred_x,
                                               radius.squeeze(-1).detach().cpu().numpy() * size[0])  # Output of
 
             # Position Model
             X_image = batch_position[0].float().to(self.device)
-            X_time = batch_position[1].float().to(self.device) / 109.6  # divide by max value of time
+            X_time = batch_position[1].float().to(self.device) / 999.0  # divide by max value of time
             X_time = X_time[:, None, None].repeat(1, self.width, self.width)
 
-            model_input = X_image[:, :3], X_time[:, None]
-            model_input[0][:, 1] = torch.tensor(red_channel_collision).to(self.device)  # Replace ground truth with
+            model_input = X_image[:, 1:3], X_time[:, None]
+            model_input[0][:, 0] = torch.tensor(red_channel_collision).to(self.device)  # Replace ground truth with
             # collision model prediction
 
             red_ball_pred = self.position_model(model_input[0], model_input[1])
 
             if visualize:
-                images = model_input[0].permute(0, 2, 3, 1).cpu().numpy()[0]
-                time = model_input[1].permute(0, 2, 3, 1).cpu().numpy()[0, :, :, 0]
+                images = X_image.permute(0, 2, 3, 1).cpu().numpy()[0]
+                time = X_time[None].permute(0, 2, 3, 1).cpu().numpy()[0, :, :, 0]
                 green_ball_collision = images[:, :, 0]
                 red_ball_collision = images[:, :, 1]
                 static_objs = images[:, :, 2]
@@ -616,18 +667,18 @@ class FlownetSolver:
                 for cross_image in cross_images:
                     row_position.append(cross_image)
                 row_position.append(position_model_pred)
-                row_position.append(target_obj)
+                # row_position.append(target_obj)
                 grid.append(row_position)
 
-            pred_y, pred_x = self.get_position_pred(red_ball_pred, radius.squeeze(1).detach().cpu().numpy() * 2)
+            pred_y, pred_x = self.get_position_pred(red_ball_pred, radius.detach().cpu().numpy() * 2)
 
             collided, solved, lfm_paths = simulate_action(self.args, sim, id, tasks[id],
                                                           pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
-                                                          radius.squeeze(-1).detach(), num_attempts=num_random_attempts,
+                                                          radius.detach(), num_attempts=num_random_attempts,
                                                           save_rollouts_dir=save_rollouts_dir,
                                                           red_ball_collision_scene=red_channel_collision)
 
-            last_red_ball_pred = draw_ball(size, pred_x, pred_y, radius.squeeze(1).detach().cpu().numpy() * size[0])
+            last_red_ball_pred = draw_ball(size, pred_x, pred_y, radius.detach().cpu().numpy() * size[0])
 
             while not solved and lfm_attempt < num_lfm_attempts:
                 row_lfm = [get_text_image("LfM Model", font_size=10, pos=(0, 25))]
@@ -635,7 +686,7 @@ class FlownetSolver:
 
                 # LfM Model
                 X_image = batch_lfm[0].float().to(self.device)
-                X_time = batch_lfm[1].float().to(self.device) / 109.6  # divide by max value of time
+                X_time = batch_lfm[1].float().to(self.device) / 999.0  # divide by max value of time
                 X_time = X_time[:, None, None].repeat(1, self.width, self.width)
 
                 model_input = X_image[:, :-1], X_time[:, None]
@@ -758,23 +809,25 @@ class FlownetSolver:
             tasks.append(task_id)
 
             X_image = batch[0].float().to(self.device)
-            X_time = batch[1].float().to(self.device) / 109.6 # divide by max value of time
+            X_time = batch[1].float().to(self.device) / 999.0  # divide by max value of time
             X_red_diam = batch[2].float().to(self.device)
-            X_red_pos = batch[3].float().to(self.device)
-            X_green_pos = batch[4].float().to(self.device)
+            # X_red_pos = batch[3].float().to(self.device)
+            # X_green_pos = batch[4].float().to(self.device)
 
             X_time = X_time[:, None, None].repeat(1, self.width, self.width)
 
-            model_input = X_image[:, :3], X_time[:, None]
+            model_input = X_image[:, 1:3], X_time[:, None]
 
             red_ball_pred = self.position_model(model_input[0], model_input[1])
 
             pred_y, pred_x = self.get_position_pred(red_ball_pred, X_red_diam.cpu().numpy())
 
             solved = simulate_action(self.args, sim, id,
+                                     task_id,
                                      pred_y / (self.width - 1.), 1. - pred_x / (self.width - 1.),
                                      X_red_diam / 2.,
-                                     save_rollouts=True)
+                                     num_attempts=0,
+                                     save_rollouts_dir=None)
 
             if solved:
                 num_solved += 1
@@ -803,7 +856,7 @@ class FlownetSolver:
         opti = T.optim.Adam(self.position_model.parameters(recurse=True), lr=3e-4)
         scheduler = T.optim.lr_scheduler.ReduceLROnPlateau(opti, 'min', patience=5, verbose=True)
 
-        train_data, test_data = load_data_position(data_paths, self.seq_len, size)
+        train_data, test_data = load_data_position(data_paths, self.seq_len, all_samples=False)
 
         train_data_loader = T.utils.data.DataLoader(PosModelDataset(train_data),
                                                     batch_size, shuffle=True)
@@ -822,11 +875,11 @@ class FlownetSolver:
             losses = []
             for i, batch in enumerate(train_data_loader):
                 X_image = batch[0].float().to(self.device)
-                X_time = batch[1].float().to(self.device) / 109.6
+                X_time = batch[1].float().to(self.device) / 999.0
 
                 X_time = X_time[:, None, None].repeat(1, self.width, self.width)
 
-                model_input = X_image[:, :3], X_time[:, None]
+                model_input = X_image[:, 1:3], X_time[:, None]
                 red_ball_gt = X_image[:, -1]
 
                 red_ball_pred = self.position_model(model_input[0], model_input[1])
@@ -886,11 +939,11 @@ class FlownetSolver:
             T.save(self.position_model.state_dict(), f"./checkpoints/PositionModel/{epoch + 1}.pt")
             for i, batch in enumerate(test_data_loader):
                 X_image = batch[0].float().to(self.device)
-                X_time = batch[1].float().to(self.device) / 109.6
+                X_time = batch[1].float().to(self.device) / 999.0
 
                 X_time = X_time[:, None, None].repeat(1, self.width, self.width)
 
-                model_input = X_image[:, :3], X_time[:, None]
+                model_input = X_image[:, 1:3], X_time[:, None]
                 red_ball_gt = X_image[:, -1]
 
                 red_ball_pred = self.position_model(model_input[0], model_input[1])
@@ -1105,8 +1158,7 @@ class FlownetSolver:
             pickle.dump({"Train losses": train_loss_log,
                          "Test losses": val_loss_log}, f)
 
-
-    def build_target_map(self, target_map, pred_pos):
+    def build_target_map(self, target_map, pred_pos, sim, id, task_id, r):
         """
         returns a target probability map with high values presenting areas which solves the environment
         and low values present areas which have low probability of solving the environment
@@ -1116,12 +1168,61 @@ class FlownetSolver:
 
         pred_pos: top k coordinates predicted by the model
         prob_map: current target map
+        sim: phyre simulator
         """
 
+        r_pixel = self.width * r
+
         for coord in pred_pos:
+            y, x = coord[0] / (self.width - 1.), 1. - coord[1] / (self.width - 1.)
+            collided, solved, _ = simulate_action(self.args, sim, id, task_id,
+                                                  y, x, r, num_attempts=0)
 
+            # updates on target map
+            # TO-DO make updates on nearby region instead of exact coordinates
+            if solved:
+                target_map[coord[1], coord[0]] += 1.0
+            else:
+                target_map[coord[1], coord[0]] -= 1.0
 
-    def train_unsupervised(self, data_paths, epochs=100, batch_size=32, width=64, recur_len=10):
+            # comment the code below to have only one update per predicted coordinate
+            # try coordinates lying vertically above coord
+            step = 5 * int(r_pixel.cpu())
+            y_pixel = coord[0]
+            x_pixel = coord[1] - step
+
+            while x_pixel > 0:
+                y, x = y_pixel / (self.width - 1.), 1. - x_pixel / (self.width - 1.)
+
+                collided, solved, _ = simulate_action(self.args, sim, id, task_id,
+                                                      y, x, r, num_attempts=0)
+                if solved:
+                    target_map[x_pixel, y_pixel] += 1.0
+                else:
+                    target_map[x_pixel, y_pixel] -= 1.0
+
+                x_pixel -= step
+
+            # try coordinates lying vertically below coord
+            y_pixel = coord[0]
+            x_pixel = coord[1] + step
+
+            while x_pixel < self.width:
+                y, x = y_pixel / (self.width - 1.), 1. - x_pixel / (self.width - 1.)
+
+                collided, solved, _ = simulate_action(self.args, sim, id, task_id,
+                                                      y, x, r, num_attempts=0)
+                if solved:
+                    target_map[x_pixel, y_pixel] += 1.0
+                else:
+                    target_map[x_pixel, y_pixel] -= 1.0
+
+                x_pixel += step
+
+        return target_map
+
+    def train_unsupervised(self, data_paths, epochs=100, batch_size=32, width=64, num_hotspots=10,
+                           explore_iter=10000):
         """
         train a recurrent unsupervised model for predicting starting position of the red ball
         given the collision state.
@@ -1140,10 +1241,33 @@ class FlownetSolver:
         train_data, test_data = load_data_position(data_paths, self.seq_len)
 
         train_data_loader = T.utils.data.DataLoader(PosModelDataset(train_data),
-                                                    batch_size, shuffle=True)
+                                                    1, shuffle=True)
         test_data_loader = T.utils.data.DataLoader(PosModelDataset(test_data),
-                                                   batch_size, shuffle=True)
+                                                   1, shuffle=True)
 
+        # Setting up the phyre simulator
+        task_idxs, tasks = [], []
+        id = 0
+
+        for batch in train_data_loader:
+            task_id = batch[3][0]
+            if task_id not in tasks:
+                task_idxs.append(id)
+                tasks.append(task_id)
+                id += 1
+
+        for batch in test_data_loader:
+            task_id = batch[3][0]
+            if task_id not in tasks:
+                task_idxs.append(id)
+                tasks.append(task_id)
+                id += 1
+
+        sim = phyre.initialize_simulator(tasks, 'ball')
+        # ############################# simulator configuration done ###############################
+
+        tasks = []
+        id = -1
         for epoch in range(epochs):
             print("Training")
             losses = []
@@ -1151,13 +1275,36 @@ class FlownetSolver:
             for i, batch in enumerate(train_data_loader):
                 X_image = batch[0].float().to(self.device)
                 X_red_diam = batch[2].float().to(self.device)
+                task_id = batch[3][0]
+                radius = X_red_diam / 2.
+
+                if task_id not in tasks:
+                    tasks.append(task_id)
+                    id += 1
 
                 model_input = X_image[:, :3]
 
-                red_ball_pred = self.position_model_unsupervised(model_input)
-                pred_pos = self.get_position_pred(red_ball_pred, X_red_diam.cpu().numpy(), num_pos=recur_len)
-                pred_pos = [(y / (self.width - 1.), 1. - x / (self.width - 1.)) for y, x in pred_pos]
-                target = T.zeros(size).to(device)
+                target = torch.zeros(size).to(self.device)
 
-                for step in recur_len:
-                    target = self.build_target_map(target, pred_pos)  # map which is used to calculate loss
+                for step in tqdm(range(1, explore_iter + 1)):
+                    red_ball_pred = self.position_model_unsupervised(model_input)
+
+                    pred_pos = self.get_position_pred(red_ball_pred, X_red_diam.cpu().numpy(), num_pos=num_hotspots)
+
+                    target = self.build_target_map(target, pred_pos, sim, id,
+                                                   task_id, radius)  # map which is used to calculate loss
+
+                    loss = F.binary_cross_entropy(red_ball_pred, F.softmax(target))
+
+                    opti.zero_grad()
+                    loss.backward()
+                    opti.step()
+
+                print(f"step: {i}/{len(train_data_loader)}, loss: {loss}")
+
+            print("---------------------------------------------------------------------")
+            print(f"epoch: {epoch}, loss: {loss}")
+            losses.append(loss.item())
+
+        os.makedirs("./checkpoints/PositionModel_unSup", exist_ok=True)
+        T.save(self.position_model.state_dict(), f"./checkpoints/PositionModel_unSup/{epoch + 1}.pt")

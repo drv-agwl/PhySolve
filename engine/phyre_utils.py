@@ -130,6 +130,20 @@ def get_solving_collision_scene(sim, task_id, task_idx):
     return np.zeros((256, 256, 3))
 
 
+def blend_bg(rollout, bg_images):
+    new_rollout = []
+    for img_arr in rollout:
+        image1 = Image.fromarray(img_arr).convert("RGBA")
+        image2 = Image.fromarray(bg_images[0]).convert("RGBA")
+        image3 = Image.fromarray(bg_images[1]).convert("RGBA")
+        blended_img = Image.blend(image1, image2, alpha=.2)
+        blended_img = Image.blend(blended_img, image3, alpha=0.2)
+
+        new_rollout.append(np.array(blended_img.convert("RGB")))
+
+    return new_rollout
+
+
 def save_rollout_as_gif(args, res, collision_scene, red_ball_collision_scene, save_dir, status, task_id):
     """
     collision scene: Collision scene by simulator from cached solutions
@@ -157,18 +171,33 @@ def save_rollout_as_gif(args, res, collision_scene, red_ball_collision_scene, sa
                                                                      axis=0)])
     pred_collision_scene = np.concatenate(
         [np.flip(phyre.observations_to_uint8_rgb(cv2.resize(x, (256, 256)).astype(np.uint8)), axis=0)[None]
-         for x in np.repeat(red_ball_collision_scene[None],  start_sleep, axis=0)])
+         for x in np.repeat(red_ball_collision_scene[None], start_sleep, axis=0)])
 
     collision_timestep = get_collision_timestep(res)
 
     empty_channel = np.zeros((256, 256, 1))
+    # overlap = np.flip(phyre.observations_to_uint8_rgb(res.images[collision_timestep]), axis=0)
+    # red_ball_collision_scene = np.concatenate([empty_channel, empty_channel,
+    #                                            cv2.resize(red_ball_collision_scene, (256, 256)).astype(np.uint8)[..., None]], axis=-1)
+    # overlap = np.max(overlap, red_ball_collision_scene, axis=2)
     overlap = phyre.observations_to_uint8_rgb(res.images[collision_timestep])
-    red_ball_collision_scene = np.concatenate([empty_channel, empty_channel, red_ball_collision_scene])
-    overlap = np.max(overlap, red_ball_collision_scene, axis=2)
+    positive_xs, positive_ys = np.where(cv2.resize(red_ball_collision_scene, (256, 256)) > 0.)
+    for pos_x, pos_y in zip(positive_xs, positive_ys):
+        overlap[pos_x, pos_y, 0] = 255.
+        overlap[pos_x, pos_y, 1] = 255.
 
-    rollout_images = res.images[:collision_timestep] + [overlap]*10 + res.images[collision_timestep+1:]
-    rollout = np.concatenate([phyre.observations_to_uint8_rgb(rollout_images[i])[None]
+    overlap = np.repeat(overlap[None], 100, axis=0)
+    # rollout_images = res.images[:collision_timestep] + [overlap]*0 + res.images[collision_timestep+1:]
+    rollout_images = np.concatenate([phyre.observations_to_uint8_rgb(x)[None] for x in res.images])
+    rollout_images = np.concatenate([rollout_images[:collision_timestep],
+                                     overlap,
+                                     rollout_images[collision_timestep + 1:]])
+
+    rollout = np.concatenate([rollout_images[i][None]
                               for i in range(0, len(rollout_images), 5)])
+
+    # blend static background in rollout images
+    rollout = blend_bg(rollout, bg_images=[sim_collision_scene[0], pred_collision_scene[0]])
 
     rollout = np.concatenate([text_solving_collision, sim_collision_scene,
                               text_predicted_collision, pred_collision_scene,

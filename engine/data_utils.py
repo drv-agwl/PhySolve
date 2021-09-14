@@ -68,16 +68,22 @@ def load_data_collision(data_paths, seq_len, all_samples=False, shuffle=True, de
     return train_data, test_data
 
 
-def load_data_position(data_paths, seq_len, all_samples=False, shuffle=True):
+def load_data_position(data_paths, seq_len, all_samples=False, shuffle=True, debug=False,
+                       training=True):
     channels = range(1, 7)
 
     train_data = []
 
-    for data_path in sorted(data_paths):
+    for i, data_path in enumerate(sorted(data_paths)):
+        # if not data_path.split('/')[-1].startswith("00002"):
+        #     continue
+        if debug and i == 1:
+            break
         with gzip.open(data_path, 'rb') as fp:
             task_data = pickle.load(fp)
         for data in task_data:
             obj_channels = data['images_solved']
+            paths_till_collision = data["path_till_collision"]
             collision_time = data["collision_timestep"]
             features = data["features"]
             task_id = data["task-id"]
@@ -93,7 +99,15 @@ def load_data_position(data_paths, seq_len, all_samples=False, shuffle=True):
             static_obj_idxs = [3, 5]
 
             green_ball_collision = obj_channels[collision_idx, green_ball_idx].astype(np.uint8)
-            red_ball_collision = obj_channels[collision_idx, red_ball_idx].astype(np.uint8)
+            # red_ball_collision = obj_channels[collision_idx, red_ball_idx].astype(np.uint8)
+
+            red_ball_final_pos = paths_till_collision[:, red_ball_idx]
+            time_final_pos = np.linspace(int(0.2*red_ball_final_pos.shape[0]), red_ball_final_pos.shape[0]-1,
+                                         endpoint=True, dtype=int, num=10)
+            red_ball_final_pos = red_ball_final_pos[time_final_pos]
+
+            red_ball_final_pos = np.flip(red_ball_final_pos, axis=0)
+            time_final_pos = np.flip(time_final_pos, axis=0)
 
             red_ball_gt = scene_0[red_ball_idx].astype(np.uint8)
 
@@ -112,18 +126,25 @@ def load_data_position(data_paths, seq_len, all_samples=False, shuffle=True):
                 [scene_66[i][None] for i in [red_ball_idx, green_ball_idx]] + [empty_channel, static_objs],
                 axis=0)
 
-            combined = np.concatenate([green_ball_collision[None], red_ball_collision[None], static_objs,
-                                       scene_0, scene_33, scene_66, red_ball_gt[None]], axis=0).astype(np.uint8)
+            # combined = np.concatenate([green_ball_collision[None], red_ball_collision[None], static_objs,
+            #                            scene_0, scene_33, scene_66, red_ball_gt[None]], axis=0).astype(np.uint8)
 
-            red_diam = features[0][-1][3]
-            train_data.append({"Images": combined,
-                               "Collision_time": collision_time,
-                               "Red_diam": red_diam,
-                               # "red_ball_pos": [features[int(collision_time)][red_ball_idx][0],
-                               #                  features[int(collision_time)][red_ball_idx][1]],
-                               # "green_ball_pos": [features[int(collision_time)][green_ball_idx][0],
-                               #                    features[int(collision_time)][green_ball_idx][1]],
-                               "task-id": task_id})
+            for time, red_ball in zip(time_final_pos, red_ball_final_pos):
+                combined = np.concatenate([green_ball_collision[None], red_ball[None], static_objs,
+                                           scene_0, scene_33, scene_66, red_ball_gt[None]], axis=0).astype(np.uint8)
+                red_diam = features[0][-1][3]
+                train_data.append({"Images": combined,
+                                   "time": time,
+                                   "Red_diam": red_diam,
+                                   # "red_ball_pos": [features[int(collision_time)][red_ball_idx][0],
+                                   #                  features[int(collision_time)][red_ball_idx][1]],
+                                   # "green_ball_pos": [features[int(collision_time)][green_ball_idx][0],
+                                   #                    features[int(collision_time)][green_ball_idx][1]],
+                                   "task-id": task_id})
+
+                # we don't want to load all uniform ending positions of red ball during testing
+                if not training:
+                    break
 
     if shuffle:
         random.seed(7)
@@ -136,10 +157,12 @@ def load_data_position(data_paths, seq_len, all_samples=False, shuffle=True):
     return train_data, test_data
 
 
-def load_lfm_data(data_paths, seq_len, all_samples=False, shuffle=True):
+def load_lfm_data(data_paths, seq_len, all_samples=False, shuffle=True, debug=False):
     train_data = []
 
     for data_path in sorted(data_paths):
+        if debug and i == 1:
+            break
         with gzip.open(data_path, 'rb') as fp:
             task_data = pickle.load(fp)
         for data in task_data:

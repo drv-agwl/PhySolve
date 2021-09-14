@@ -31,7 +31,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser("PhySolve", parents=[get_args_parser()])
     args = parser.parse_args()
 
-    data_dir = osp.join(args.root_dir, "DataCollection/Database")
+    data_dir = osp.join(args.root_dir, "DataCollection/Database_newPosModel")
     paths = [osp.join(data_dir, i) for i in os.listdir(data_dir)]
 
     solver = FlownetSolver(args, 5, 64, args.device)
@@ -54,25 +54,28 @@ if __name__ == '__main__':
     if args.simulate_collision_model:
         solver.simulate_collision_model(checkpoint=osp.join(args.root_dir, 'checkpoints/CollisionModel/26.pt'),
                                         data_paths=paths,
-                                        batch_size=1)
+                                        batch_size=10)
 
     if args.simulate_position_model:
-        solver.simulate_position_model(checkpoint=osp.join(args.root_dir, 'checkpoints/PositionModel/32.pt'),
+        solver.simulate_position_model(checkpoint=osp.join(args.root_dir, 'checkpoints/PositionModel/31.pt'),
                                        data_paths=paths,
-                                       batch_size=1)
+                                       batch_size=32,
+                                       visualize=True,
+                                       visualize_dir='results/visualisations/Collision_Model')
 
     if args.simulate_model:
         solver.simulate_combined(collision_ckpt=osp.join(args.root_dir, 'checkpoints/CollisionModel/26.pt'),
-                                 position_ckpt=osp.join(args.root_dir, 'checkpoints/PositionModel/32.pt'),
-                                 lfm_ckpt=osp.join('checkpoints/LfM/51.pt'),
+                                 position_ckpt=osp.join(args.root_dir, 'checkpoints/PositionModel/31.pt'),
+                                 lfm_ckpt=osp.join('checkpoints/LfM/31.pt'),
                                  data_paths=paths,
                                  batch_size=1,
                                  save_rollouts_dir=args.save_rollouts_dir,
                                  visualise_dir=args.visualise_dir,
                                  device=args.device,
-                                 num_lfm_attempts=20,
+                                 num_lfm_attempts=0,
                                  num_random_attempts=0,
-                                 visualize=True)
+                                 visualize=True,
+                                 debug=False)
 
     if args.train_unsupervised:
         solver.train_unsupervised(data_paths=paths,
