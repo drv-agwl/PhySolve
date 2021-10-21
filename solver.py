@@ -1,4 +1,5 @@
 from engine.FlownetSolver import FlownetSolver
+from engine.GridSolver import GridSolver
 import os
 import os.path as osp
 import sys
