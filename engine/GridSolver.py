@@ -8,9 +8,16 @@ from tqdm import tqdm
 
 class Line:
     def __init__(self, start=(0, 0), end=(0, 0), orientation="H"):
+        """"
+        Line: ax + by = c
+        """
         self.start = start
         self.end = end
         self.orientation = orientation
+
+        self.a = end[1] - start[1]
+        self.b = start[0] - end[0]
+        self.c = start[0] * (end[1] - start[1]) + start[1] * (start[0] - end[0])
 
     def setStart(self, start):
         self.start = start
@@ -20,6 +27,15 @@ class Line:
 
     def setOrientation(self, orientation):
         self.orientation = orientation
+
+    def locatePoint(self, point):
+        """
+        locates a point wrt Line
+        True means outside or on the line, False means inside
+        """
+
+        val = self.a * point[0] + self.b * point[1]
+        return val >= self.c
 
 
 class GridSolver:
