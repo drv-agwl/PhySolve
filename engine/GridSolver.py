@@ -393,6 +393,12 @@ class GridSolver:
         initial_scene = phyre.observations_to_float_rgb(sim.initial_scenes[task_idx])
         initial_scene = self.makeGridForObject(initial_scene, obj_idxs=[0, 1, 2], visualise=True)
 
+        if visualise:
+            for point in region_space:
+                initial_scene[point[1], point[0], :] = np.array([255, 0., 0.])
+            plt.imshow(initial_scene)
+            plt.show()
+
         cache = phyre.get_default_100k_cache('ball')
         actions = cache.action_array
         actionList = actions[cache.load_simulation_states(task) == 1]
@@ -453,4 +459,5 @@ if __name__ == '__main__':
 
     gridSolver2 = GridSolver(sim.initial_featurized_objects[1])
     gridSolver2.makeRegions()
-    solved = gridSolver2.gridSolve(sim, 1, tasks_ids[1], solution_region, visualise=False)
+    gridSolver2.visualiseRegions()
+    solved = gridSolver2.gridSolve(sim, 1, tasks_ids[1], solution_region, visualise=True)
