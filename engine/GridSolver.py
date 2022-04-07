@@ -483,7 +483,7 @@ class GridSolver:
 
             self.lineDatabase[i] = [l1, l2, l3, l4, l5, l6]
 
-            # adding region default keys (4 regions currently per object)
+            # adding region default keys (12 regions currently per object)
             regionTree[1][f"{i}0"] = []
             regionTree[1][f"{i}1"] = []
             regionTree[1][f"{i}2"] = []
@@ -572,24 +572,23 @@ class GridSolver:
         return regionTree
 
     def getRegionForPointWrtObject(self, point, obj_idx):
-        region_marker = np.array([0 for i in range(16)])  # 1 if point belongs to region with region id = array idx.
+        region_marker = np.array([0 for i in range(12)])  # 1 if point belongs to region with region id = array idx.
         # 0 otherwise
+
         lines = self.lineDatabase[obj_idx]
 
-        if lines[0].locatePoint(point) and not lines[1].locatePoint(point) \
-                and lines[3].locatePoint(point) and not lines[4].locatePoint(point):
+        if not lines[0].locatePoint(point) and not lines[3].locatePoint(point):
             region_marker[0] = 1
 
-        if lines[1].locatePoint(point) and not lines[2].locatePoint(point) \
-                and lines[3].locatePoint(point) and not lines[4].locatePoint(point):
+        if lines[0].locatePoint(point) and not lines[1].locatePoint(point) \
+                and not lines[3].locatePoint(point):
             region_marker[1] = 1
 
-        if lines[0].locatePoint(point) and not lines[1].locatePoint(point) \
-                and lines[4].locatePoint(point) and not lines[5].locatePoint(point):
+        if lines[1].locatePoint(point) and not lines[2].locatePoint(point) \
+                and not lines[3].locatePoint(point):
             region_marker[2] = 1
 
-        if lines[1].locatePoint(point) and not lines[2].locatePoint(point) \
-                and lines[4].locatePoint(point) and not lines[5].locatePoint(point):
+        if lines[2].locatePoint(point) and not lines[3].locatePoint(point):
             region_marker[3] = 1
 
         if not lines[0].locatePoint(point) \
@@ -608,33 +607,19 @@ class GridSolver:
                 and lines[4].locatePoint(point) and not lines[5].locatePoint(point):
             region_marker[7] = 1
 
-        if lines[0].locatePoint(point) and not lines[1].locatePoint(point) \
-                and not lines[3].locatePoint(point):
+        if not lines[0].locatePoint(point) and lines[5].locatePoint(point):
             region_marker[8] = 1
 
-        if lines[1].locatePoint(point) and not lines[2].locatePoint(point) \
-                and not lines[3].locatePoint(point):
+        if lines[0].locatePoint(point) and not lines[1].locatePoint(point) \
+                and lines[5].locatePoint(point):
             region_marker[9] = 1
 
-        if lines[0].locatePoint(point) and not lines[1].locatePoint(point) \
+        if lines[1].locatePoint(point) and not lines[2].locatePoint(point) \
                 and lines[5].locatePoint(point):
             region_marker[10] = 1
 
-        if lines[1].locatePoint(point) and not lines[2].locatePoint(point) \
-                and lines[5].locatePoint(point):
-            region_marker[11] = 1
-
-        if not lines[0].locatePoint(point) and not lines[3].locatePoint(point):
-            region_marker[12] = 1
-
-        if lines[2].locatePoint(point) and not lines[3].locatePoint(point):
-            region_marker[13] = 1
-
-        if not lines[0].locatePoint(point) and lines[5].locatePoint(point):
-            region_marker[14] = 1
-
         if lines[2].locatePoint(point) and lines[5].locatePoint(point):
-            region_marker[15] = 1
+            region_marker[11] = 1
 
         return region_marker
 
