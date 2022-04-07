@@ -3,9 +3,20 @@ import pandas as pd
 import os.path as osp
 import phyre
 import matplotlib.pyplot as plt
+import torch.utils.data
 from matplotlib.pyplot import figure
 import numpy as np
 from phyre_utils import invert_bg
+import torch
+import numpy as np
+from torchvision import models
+from sklearn.model_selection import train_test_split
+
+"""
+
+Contains code to try out experiments
+
+"""
 
 
 def merge_csv(src_dir, task_ids):
@@ -185,9 +196,9 @@ def plot_reciprocal_gain(combined_csv_file, src_dir, task_ids):
             row = idx[0] * slab_size
             col = idx[1] * slab_size
 
-            image[row:, col:col+2, :] = np.array([1., 0., 0.])
-            image[row:row+2, :col, :] = np.array([1., 0., 0.])
-            image[row-10:row+10, col-10:col+10, :] = np.array([1., 0., 0.])
+            image[row:, col:col + 2, :] = np.array([1., 0., 0.])
+            image[row:row + 2, :col, :] = np.array([1., 0., 0.])
+            image[row - 10:row + 10, col - 10:col + 10, :] = np.array([1., 0., 0.])
 
         return image
 
@@ -210,6 +221,164 @@ def plot_reciprocal_gain(combined_csv_file, src_dir, task_ids):
     plt.savefig('./reciprocal_gains_rgb.png', dpi=200)
 
 
+def get_task_images_with_active_region(src_dir, task_ids, region):
+    """
+    returns the initial simulator scene of the task where the input region has high solution density
+    """
+
+    images = []
+
+    sim = phyre.initialize_simulator([i.replace('_', ':') for i in tasks_ids], 'ball')
+    csv_files = [osp.join(src_dir, f"{task_id}.csv") for task_id in task_ids]
+    density_thresh = 0.5
+
+    for task_idx, csv_file in enumerate(csv_files):
+        df = pd.read_csv(csv_file)
+        if region not in list(df.values[:, 1]):
+            continue
+
+        row_df = df[df["Region Names"] == region]
+
+        if row_df.values[0, 2] < density_thresh:
+            continue
+
+        initial_scene = phyre.observations_to_float_rgb(sim.initial_scenes[task_idx])
+
+        images.append({"task_id": csv_file.split('/')[-1],
+                       "image": initial_scene})
+
+    return images
+
+
+def train_discriminator(region1_images, region2_images, region1, region2,
+                        batch_size=4, device='cuda', epochs=100):
+    task_ids = [i["task_id"] for i in region1_images] + [i["task_id"] for i in region2_images]
+    region1_images = np.array([i["image"] for i in region1_images])
+    region2_images = np.array([i["image"] for i in region2_images])
+
+    X_data = np.concatenate([region1_images, region2_images], axis=0)
+    y_data = np.zeros((X_data.shape[0], 1))
+    y_data[len(region1_images):] = [1.]
+
+    X_train, X_test, y_train, y_test = train_test_split(X_data, y_data, test_size=0.10, random_state=42)
+
+    class Dataset(torch.utils.data.Dataset):
+        def __init__(self, X, y):
+            self.X = X
+            self.y = y
+            self.mean = np.array([0.485, 0.456, 0.406]).reshape((1, 1, 3))
+            self.std = np.array([0.229, 0.224, 0.225]).reshape((1, 1, 3))
+
+            assert self.X.shape[0] == self.y.shape[0]
+
+        def __getitem__(self, idx):
+            X = self.X[idx]
+            y = self.y[idx]
+
+            X = (X - self.mean) / self.std
+
+            return X.transpose(2, 0, 1), y
+
+        def __len__(self):
+            return len(self.X)
+
+    train_dataset = Dataset(X_train, y_train)
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+    val_dataset = Dataset(X_test, y_test)
+    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
+
+    class Model(torch.nn.Module):
+        def __init__(self):
+            super(Model, self).__init__()
+
+            self.model = models.resnet18(pretrained=True)
+            num_ftrs = self.model.fc.out_features
+            self.dense = torch.nn.Linear(num_ftrs, 256)
+            self.out = torch.nn.Linear(256, 1)
+            self.activation = torch.nn.Sigmoid()
+
+        def forward(self, X):
+            X = self.model(X)
+            fc_out = self.dense(X)
+            X = self.out(torch.nn.ReLU()(fc_out))
+            X = self.activation(X)
+
+            return X, fc_out
+
+    model = Model().to(device)
+    loss_fn = torch.nn.BCELoss()
+    opt = torch.optim.Adam(model.parameters(), lr=1e-3)
+    train_epoch_losses = []
+    val_epoch_losses = []
+
+    for epoch in range(epochs):
+        model.train()
+        train_epoch_loss = 0
+        for i, batch in enumerate(train_dataloader):
+            X, y = batch[0].float().to(device), batch[1].float().to(device)
+            logits, _ = model(X)
+
+            loss = loss_fn(logits, y)
+
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+
+            train_epoch_loss += loss.item()
+
+        train_epoch_loss /= len(train_dataloader)
+        train_epoch_losses.append(train_epoch_loss)
+
+        val_epoch_loss = 0
+        model.eval()
+        for i, batch in enumerate(val_dataloader):
+            X, y = batch[0].float().to(device), batch[1].float().to(device)
+            logits, _ = model(X)
+
+            loss = loss_fn(logits, y)
+
+            val_epoch_loss += loss.item()
+
+        val_epoch_loss /= len(val_dataloader)
+        val_epoch_losses.append(val_epoch_loss)
+
+        if epoch == epochs - 1:
+            # save the visualisations at last epoch
+            dataset = Dataset(X_data, y_data)
+            dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False)
+
+            for i, batch in enumerate(dataloader):
+                X, y = batch[0].float().to(device), batch[1].float().to(device)
+                _, fc_out = model(X)
+                fc_out = fc_out.detach().cpu().numpy()[0]
+
+                # normalize
+                fc_out = (fc_out - min(fc_out)) / (max(fc_out) - min(fc_out))
+
+                if y.cpu().numpy()[0] == 0.:
+                    # region1
+                    os.makedirs(f'./{region1}', exist_ok=True)
+                    plt.bar([i for i in range(len(fc_out))], fc_out)
+                    plt.savefig(osp.join(f'./{region1}', task_ids[i].split('.')[0]+'.png'))
+                    plt.cla()
+
+                else:
+                    # region2
+                    os.makedirs(f'./{region2}', exist_ok=True)
+                    plt.bar([i for i in range(len(fc_out))], fc_out)
+                    plt.savefig(osp.join(f'./{region2}', task_ids[i].split('.')[0]+'.png'))
+                    plt.cla()
+
+        print(f"Epoch: {epoch} | Train loss: {train_epoch_loss} | Val loss: {val_epoch_loss}")
+
+    plt.plot(list(range(1, epochs + 1)), train_epoch_losses)
+    plt.plot(list(range(1, epochs + 1)), val_epoch_losses)
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.show()
+
+
 if __name__ == '__main__':
     src_dir = "/home/dhruv/Desktop/PhySolve/engine/experience_data"
 
@@ -226,6 +395,10 @@ if __name__ == '__main__':
     # merge_csv(src_dir, tasks_ids)
 
     # plot_combined_density("combined.csv", src_dir, tasks_ids)
-    plot_reciprocal_gain("combined.csv", src_dir, tasks_ids)
+    # plot_reciprocal_gain("combined.csv", src_dir, tasks_ids)
 
     # plot_csv(src_dir, osp.join(src_dir, "combined.csv"))
+    region1_images = get_task_images_with_active_region(src_dir, tasks_ids, "depth-3:02_110_22")
+    region2_images = get_task_images_with_active_region(src_dir, tasks_ids, "depth-3:01_19_21")
+
+    train_discriminator(region1_images, region2_images, "depth-3:02_110_22", "depth-3:01_19_21")
